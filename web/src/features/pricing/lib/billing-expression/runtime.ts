@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { parseBillingDate } from './date'
 import { compileBillingExpression } from './parser'
 import {
   BillingExpressionError,
@@ -345,8 +346,23 @@ class BillingRuntime {
     }
     const left = this.evaluate(node.left)
     const right = this.evaluate(node.right)
-    const a = left.value
-    const b = right.value
+    let a = left.value
+    let b = right.value
+    if (a instanceof Date || b instanceof Date) {
+      if (
+        !(a instanceof Date) ||
+        !(b instanceof Date) ||
+        !['==', '!=', '<', '<=', '>', '>='].includes(node.operator)
+      ) {
+        throw new BillingExpressionError({
+          code: 'type',
+          detail: 'date comparison',
+          position: node.start,
+        })
+      }
+      a = a.getTime()
+      b = b.getTime()
+    }
     if (node.operator === '==' || node.operator === '!=') {
       if (
         a !== null &&
@@ -422,6 +438,17 @@ class BillingRuntime {
   private call(node: Extract<ExpressionNode, { kind: 'call' }>): RuntimeValue {
     const args = node.args
     switch (node.name) {
+      case 'now': {
+        if (!Number.isFinite(this.now.getTime())) {
+          throw new BillingExpressionError({
+            code: 'type',
+            detail: 'simulation time',
+          })
+        }
+        return { value: this.now }
+      }
+      case 'date':
+        return { value: parseBillingDate(this.string(args[0])) }
       case 'fixed': {
         const amount = this.numeric(args[0]).value
         this.billingUnit = 'request'

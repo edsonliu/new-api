@@ -40,7 +40,11 @@ export const TIME_FUNCTIONS = [
   'day',
 ] as const
 export type TimeFunction = (typeof TIME_FUNCTIONS)[number]
+// Clock probes include absolute time; date() itself is a constant, not a clock.
+export const CLOCK_FUNCTIONS = [...TIME_FUNCTIONS, 'now'] as const
 export const BILLING_FUNCTIONS: Readonly<Record<string, number>> = {
+  now: 0,
+  date: 1,
   tier: 2,
   fixed: 1,
   param: 1,

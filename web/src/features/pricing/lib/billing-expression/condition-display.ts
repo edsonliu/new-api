@@ -20,6 +20,7 @@ import type { TOptions } from 'i18next'
 
 import { toIntlLocale } from '@/i18n/languages'
 
+import { parseBillingDate } from './date'
 import { flattenBinary } from './display'
 import { compileBillingExpression } from './parser'
 import { TIME_FUNCTIONS, type ExpressionNode, type TimeFunction } from './types'
@@ -163,6 +164,25 @@ function describeBillingCondition(
     return {
       text: `${t(label)} ${node.operator} ${node.right.value.toLocaleString(toIntlLocale(locale))}`,
       kind: 'combined',
+      timezone: '',
+    }
+  }
+  if (
+    node.kind === 'binary' &&
+    ['<', '<=', '>', '>=', '==', '!='].includes(node.operator) &&
+    node.left.kind === 'call' &&
+    node.left.name === 'now' &&
+    node.right.kind === 'call' &&
+    node.right.name === 'date' &&
+    node.right.args[0].kind === 'literal' &&
+    typeof node.right.args[0].value === 'string'
+  ) {
+    const source = node.right.args[0].value
+    parseBillingDate(source)
+    // Keep the explicit offset: converting to the viewer's zone could misstate holidays.
+    return {
+      text: `${t('Current time')} ${node.operator} ${source.replace('T', ' ')}`,
+      kind: 'calendar',
       timezone: '',
     }
   }

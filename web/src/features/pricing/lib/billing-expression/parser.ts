@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { parseBillingDate } from './date'
 import {
   BILLING_FUNCTIONS,
   BILLING_VARIABLES,
@@ -346,7 +347,13 @@ class BillingParser {
   }
 }
 
-type ExpressionType = 'number' | 'string' | 'boolean' | 'nil' | 'dynamic'
+type ExpressionType =
+  | 'number'
+  | 'string'
+  | 'boolean'
+  | 'nil'
+  | 'datetime'
+  | 'dynamic'
 
 function checkExpressionTypes(ast: ExpressionNode): void {
   const types = new Map<ExpressionNode, ExpressionType>()
@@ -385,6 +392,13 @@ function checkExpressionTypes(ast: ExpressionNode): void {
         requireType(node.right, 'boolean')
         result = 'boolean'
       } else if (['==', '!=', '<', '<=', '>', '>='].includes(node.operator)) {
+        if (
+          types.get(node.left) === 'datetime' ||
+          types.get(node.right) === 'datetime'
+        ) {
+          requireType(node.left, 'datetime')
+          requireType(node.right, 'datetime')
+        }
         result = 'boolean'
       } else if (
         node.operator === '+' &&
@@ -398,10 +412,21 @@ function checkExpressionTypes(ast: ExpressionNode): void {
         result = 'number'
       }
     } else if (node.kind === 'call') {
-      if (['param', 'header', 'u', ...TIME_FUNCTIONS].includes(node.name)) {
+      if (
+        ['param', 'header', 'u', 'date', ...TIME_FUNCTIONS].includes(node.name)
+      ) {
         requireType(node.args[0], 'string')
       }
-      if (node.name === 'header') result = 'string'
+      if (node.name === 'date' || node.name === 'now') {
+        result = 'datetime'
+        if (
+          node.name === 'date' &&
+          node.args[0].kind === 'literal' &&
+          typeof node.args[0].value === 'string'
+        ) {
+          parseBillingDate(node.args[0].value)
+        }
+      } else if (node.name === 'header') result = 'string'
       else if (node.name === 'has') {
         requireType(node.args[1], 'string')
         result = 'boolean'

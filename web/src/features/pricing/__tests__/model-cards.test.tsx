@@ -39,6 +39,7 @@ import { CachedPriceCell } from '../components/cached-price-cell'
 import { ModelCard } from '../components/model-card'
 import { ModelCardGrid } from '../components/model-card-grid'
 import type { PricingModel } from '../types'
+import calendarModels from './fixtures/deepseek-calendar.json'
 
 function pricingModel(overrides: Partial<PricingModel> = {}): PricingModel {
   return {
@@ -88,6 +89,44 @@ afterEach(() => {
 })
 
 describe('model cards', () => {
+  it('shows calendar prices and cache rates instead of the raw expression', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-01T10:00:00+08:00'))
+    const model = pricingModel({
+      ...calendarModels[2],
+      billing_mode: 'tiered_expr',
+    })
+    render(<ModelCard model={model} onClick={vi.fn()} tokenUnit='M' />)
+    expect(
+      screen.queryByText('Special billing expression')
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('Current period price')).toBeVisible()
+    expect(screen.getByText('Cache Read')).toBeVisible()
+    expect(screen.getByText('Input').parentElement).toHaveTextContent(
+      '$0.149477'
+    )
+    act(() => {
+      vi.setSystemTime(new Date('2026-10-08T10:00:00+08:00'))
+      fireEvent(document, new Event('visibilitychange'))
+    })
+    expect(screen.getByText('Input').parentElement).toHaveTextContent(
+      '$0.298954'
+    )
+  })
+  it('refreshes date-only conditions when a calendar boundary is crossed', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-30T23:59:59+08:00'))
+    const model = pricingModel({
+      billing_mode: 'tiered_expr',
+      billing_expr:
+        'now() < date("2026-10-01T00:00:00+08:00") ? tier("before", p * 2) : tier("after", p * 1)',
+    })
+    render(<ModelCard model={model} onClick={vi.fn()} tokenUnit='M' />)
+    expect(screen.getByText('$2')).toBeVisible()
+    act(() => vi.advanceTimersByTime(1000))
+    expect(screen.getByText('$1')).toBeVisible()
+  })
+
   it('shows separate generic and image cache prices including a free image cache', () => {
     render(
       <CachedPriceCell
