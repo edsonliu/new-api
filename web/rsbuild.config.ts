@@ -15,6 +15,10 @@ export default defineConfig(({ envMode }) => {
     env.rawPublicVars.VITE_REACT_APP_SERVER_URL ||
     'http://localhost:3000'
 
+  const homeVariant =
+    process.env.VITE_HOME_VARIANT ||
+    env.rawPublicVars.VITE_HOME_VARIANT ||
+    'jdtoken'
   const isProd = envMode === 'production'
   const devProxy = Object.fromEntries(
     (['/api', '/v1', '/mj', '/pg'] as const).map((key) => [
@@ -53,6 +57,9 @@ export default defineConfig(({ envMode }) => {
       },
     },
     source: {
+      define: {
+        'import.meta.env.VITE_HOME_VARIANT': JSON.stringify(homeVariant),
+      },
       entry: {
         index: './src/main.tsx',
       },
@@ -63,8 +70,14 @@ export default defineConfig(({ envMode }) => {
       },
     },
     html: {
-      template: './index.html',
-      favicon: './public/favicon.ico',
+      template:
+        homeVariant === 'upstream'
+          ? './index.html'
+          : './src/features/jdtoken-home/template.html',
+      favicon:
+        homeVariant === 'upstream'
+          ? './public/favicon.ico'
+          : './public/jdtoken/mark-square-20261012.png',
     },
     server: {
       host: '0.0.0.0',

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useCallback, useEffect, useRef } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
@@ -28,6 +28,8 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { CTA, Features, Hero, HowItWorks, Stats } from './components'
 import { useHomePageContent } from './hooks'
+
+const JdtokenHome = lazy(() => import('@/features/jdtoken-home'))
 
 export function Home() {
   const { i18n, t } = useTranslation()
@@ -117,6 +119,20 @@ export function Home() {
           />
         </div>
       </PublicLayout>
+    )
+  }
+
+  if (import.meta.env.VITE_HOME_VARIANT !== 'upstream') {
+    return (
+      <Suspense
+        fallback={
+          <PublicLayout>
+            <p>{t('Loading...')}</p>
+          </PublicLayout>
+        }
+      >
+        <JdtokenHome />
+      </Suspense>
     )
   }
 
