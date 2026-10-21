@@ -37,8 +37,8 @@ that deployment succeeded. Never deploy a failed tag by manually switching image
 Prepare a corrected, newly validated release tag instead. Automatic rollback is
 part of the tag-triggered job, not an alternative release path.
 
-Only append-only audit-index migration is expected for the 2026-10-22 upgrade;
-the prior image can ignore the extra index. Reassess migration and rollback
+The 2026-10-22 upgrade adds an audit index and two cache-usage columns to the
+quota statistics table. The prior image can ignore these additions. Reassess migration and rollback
 compatibility on every future upgrade. Remove temporary stage containers after
 acceptance, but retain production backups, manifests and test evidence.
 

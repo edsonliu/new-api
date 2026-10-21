@@ -137,7 +137,7 @@ except Exception:
         compose.write_text(old_config)
         run('docker','compose','up','-d','--no-deps','app',cwd=appdir)
         wait_ready(status.get('version',''))
-        # This upgrade adds an audit index; old application code tolerates it.
+        # Added audit index and cache-stat columns are tolerated by the old image.
         # Do not restore the database over newer user transactions.
     raise
 finally:
