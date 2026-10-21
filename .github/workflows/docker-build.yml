@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - '*'
+      - '!jdtoken-v*' # JDOTOKEN uses deployment/jdtoken tag delivery
       - '!nightly*'
   workflow_dispatch:
     inputs:
