@@ -156,3 +156,22 @@ func urlQueryEscape(value string) string {
 	replacer := strings.NewReplacer("+", "%2B", "=", "%3D")
 	return replacer.Replace(value)
 }
+
+func TestSeedanceUploadSignatureExcludedFromAccessLog(t *testing.T) {
+	var logs bytes.Buffer
+	before := gin.DefaultWriter
+	gin.DefaultWriter = &logs
+	t.Cleanup(func() { gin.DefaultWriter = before })
+	engine := gin.New()
+	SetUpLogger(engine)
+	engine.GET("/v1/seedance/uploads/:id/content", func(c *gin.Context) {
+		require.Equal(t, "private-signature-fixture", c.Query("signature"))
+		c.Status(http.StatusOK)
+	})
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/seedance/uploads/jdu_fixture/content?expires=123&signature=private-signature-fixture", nil))
+	require.Equal(t, http.StatusOK, response.Code)
+	require.NotContains(t, logs.String(), "private-signature-fixture")
+	require.NotContains(t, logs.String(), "expires=123")
+	require.Contains(t, logs.String(), "/v1/seedance/uploads/jdu_fixture/content")
+}
