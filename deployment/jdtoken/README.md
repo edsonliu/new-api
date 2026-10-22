@@ -45,3 +45,12 @@ acceptance, but retain production backups, manifests and test evidence.
 This extension changes no application authentication, billing or channel logic.
 Future upstream merges must retain the two workflow tag exclusions and review
 the dedicated delivery scripts against current Compose/Nginx configuration.
+
+Seedance phase 1 initial activation may add a root-only `runtime.env` artifact.
+Its SHA256 must match the manifest and production-copy rehearsal. The tag job
+adds the four `JDOTOKEN_SEEDANCE_*` variables via `seedance.env`, uses the
+existing persistent `/data` volume, and changes Nginx access logging to omit
+query parameters. The job backs up and restores these files on failure. This
+initial activation deliberately rejects overriding pre-existing runtime values;
+subsequent capability changes use the native `JDOTOKENSeedance` option. Never
+commit or copy the signing secret into public release evidence.

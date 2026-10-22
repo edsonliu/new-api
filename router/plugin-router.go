@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
+	"github.com/QuantumNous/new-api/jdtoken/seedance"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
@@ -117,6 +118,7 @@ func productionPluginRouteHandlers(generation *jsplugin.RoutingGeneration, bindi
 	return []gin.HandlerFunc{
 		pinRoute,
 		middleware.TokenAuth(),
+		seedance.PrepareReferences(),
 		middleware.SystemPerformanceCheck(),
 		middleware.ModelRequestRateLimit(),
 		middleware.PrepareTaskPluginRoute(),

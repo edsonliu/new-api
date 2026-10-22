@@ -1,0 +1,50 @@
+{
+  "enabled": false,
+  "bindings": [
+    {
+      "name": "seedance-standard",
+      "channel_id": 3,
+      "provider": "lingxi",
+      "store_types": ["Image", "Video"],
+      "models": {
+        "doubao-seedance-2-0-mini-260615": {
+          "upstream_model": "seedance-2.0-mini",
+          "reference_types": ["Image", "Video"],
+          "cancel": true
+        },
+        "doubao-seedance-2-5-260628": {
+          "upstream_model": "seedance-2.5",
+          "reference_types": ["Image", "Video"],
+          "cancel": true,
+          "draft": true,
+          "draft_upgrade": true,
+          "mov": true
+        }
+      }
+    },
+    {
+      "name": "seedance-alternate",
+      "channel_id": 9,
+      "provider": "mobilecloud",
+      "store_types": ["Image", "Video"],
+      "models": {
+        "doubao-seedance-2-0-260128": {
+          "upstream_model": "doubao-seedance-2-0-260128",
+          "reference_types": ["Image", "Video"]
+        }
+      }
+    },
+    {
+      "name": "seedance-upload",
+      "channel_id": 6,
+      "provider": "sdgo",
+      "store_types": [],
+      "models": {
+        "doubao-seedance-2-0-mini-260615": {
+          "upstream_model": "doubao-seedance-2-0-mini-260615",
+          "reference_types": ["Image", "Video"]
+        }
+      }
+    }
+  ]
+}

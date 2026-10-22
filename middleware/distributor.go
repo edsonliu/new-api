@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	taskdto "github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/jdtoken/seedance"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
@@ -622,6 +623,15 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	key, index, newAPIError := channel.GetNextEnabledKey()
 	if newAPIError != nil {
 		return newAPIError
+	}
+	if err := seedance.ValidateSelected(c, channel, key); err != nil {
+		status := http.StatusConflict
+		var apiErr *seedance.APIError
+		if errors.As(err, &apiErr) {
+			status = apiErr.Status
+		}
+		abortWithOpenAiMessage(c, status, seedance.TranslateErrorMessage(c, err.Error()))
+		return types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 	}
 	if channel.ChannelInfo.IsMultiKey {
 		common.SetContextKey(c, constant.ContextKeyChannelIsMultiKey, true)

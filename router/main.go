@@ -19,7 +19,7 @@ func SetRouter(router *gin.Engine, assets WebAssets) {
 	SetTaskPluginProtocolRouter(router)
 	SetVideoRouter(router)
 	SetTaskRouter(router)
-	pluginDispatcher := SetPluginRouter(router)
+	pluginDispatcher := jdSeedanceDispatcher(SetPluginRouter(router))
 	frontendBaseUrl := os.Getenv("FRONTEND_BASE_URL")
 	if common.IsMasterNode && frontendBaseUrl != "" {
 		frontendBaseUrl = ""

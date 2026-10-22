@@ -52,8 +52,12 @@ if sys.argv[1] == 'prepare':
     env.update(SQL_DSN=f'postgres://jdtoken:{password}@{pg}:5432/jdtoken_new_api?sslmode=disable',
                REDIS_CONN_STRING=f'redis://{redis}:6379', NODE_TYPE='master',
                SESSION_COOKIE_TRUSTED_URL='https://www.jdotoken.com,https://jdotoken.com', SESSION_SECRET=secrets.token_urlsafe(32))
+    if (root/'runtime.env').exists():
+        env.update(dict(line.split('=',1) for line in (root/'runtime.env').read_text().splitlines() if line))
     (root/'app.env').write_text(''.join(f'{k}={v}\n' for k,v in env.items()))
     (root/'stage-prepared.json').write_text(json.dumps({'production_image':inspect['Config']['Image'],'internal_network':network,'channels_disabled':True,'dump_bytes':(root/'rehearsal.dump').stat().st_size},indent=2))
+    business={table:hashlib.sha256(sql(pg, f"SELECT row_to_json(t)::jsonb - 'last_login_at' FROM (SELECT * FROM {table} ORDER BY id)t").encode()).hexdigest() for table in ('users','tokens','tasks')}
+    (root/'business-before.json').write_text(json.dumps(business))
     print((root/'stage-prepared.json').read_text())
 elif sys.argv[1] in ('start','verify'):
     if sys.argv[1]=='start':
@@ -77,6 +81,10 @@ elif sys.argv[1] in ('start','verify'):
     stage_values=sql(pg,query)
     prod_values=sql('jdtoken-postgres-prod',query)
     assert stage_values==prod_values, 'Critical configuration changed during migration'
+    business={table:hashlib.sha256(sql(pg, f"SELECT row_to_json(t)::jsonb - 'last_login_at' FROM (SELECT * FROM {table} ORDER BY id)t").encode()).hexdigest() for table in ('users','tokens','tasks')}
+    assert business==json.loads((root/'business-before.json').read_text()), 'Business data changed during migration'
+    if (root/'runtime.env').exists():
+        assert sql(pg, "SELECT count(*) FROM information_schema.tables WHERE table_name IN ('jdtoken_seedance_resources','jdtoken_seedance_uploads','jdtoken_seedance_task_deletions')")=='3'
     creds=json.loads(Path('/data/app/jdtoken-new-api/admin-credentials.json').read_text())
     session=requests.Session();session.headers['Origin']='https://www.jdotoken.com'
     login=session.post(stage_base+'/api/user/login',json={'username':creds['username'],'password':creds['password']},timeout=15).json()
@@ -89,4 +97,6 @@ elif sys.argv[1] in ('start','verify'):
         session.close()
     subprocess.run(['docker','exec',pg,'pg_dump','-U','jdtoken','-d','jdtoken_new_api','--schema-only'],stdout=(root/'schema-after.sql').open('w'),check=True)
     result={'success':True,'version':status.json()['data']['version'],'audit_index_present':True,'image_id':inspect['Image'],'critical_settings_preserved':True,'about_preserved':True,'admin_login_logout':True,'internal_network':True}
+    result['business_data_preserved']=True
+    if (root/'runtime.env').exists():result['runtime_sha256']=hashlib.sha256((root/'runtime.env').read_bytes()).hexdigest()
     (root/'stage-result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))

@@ -915,3 +915,40 @@ func TestSecurityRoutesDisableCachingBeforeAuthentication(t *testing.T) {
 		})
 	}
 }
+
+func TestJDSeedanceExtensionPreservesPluginRoutesAndRequiresToken(t *testing.T) {
+	plugin := compileRouterPlugin(t, "doubao", "1.0.0", `[
+  {method:"POST",path:"/doubao/api/v3/contents/generations/tasks",type:"dynamic"},
+  {method:"GET",path:"/doubao/api/v3/contents/generations/tasks/:task_id",type:"dynamic"}
+ ]`)
+	handlers := testPluginRouteHandlers(func(c *gin.Context, _ *jsplugin.RoutingGeneration, _ jsplugin.RouteBinding) {
+		c.String(200, "original-plugin")
+	})
+	outer, registry := newPluginRouterTest(t, []*jsplugin.LoadedPlugin{plugin}, handlers)
+	outer.NoRoute(jdSeedanceDispatcher((&pluginRouteDispatcher{registry: registry}).dispatch), func(c *gin.Context) { c.String(200, "web") })
+	for _, tc := range []struct {
+		method, path string
+		code         int
+		body         string
+	}{
+		{"POST", "/doubao/api/v3/contents/generations/tasks", 200, "original-plugin"},
+		{"GET", "/doubao/api/v3/contents/generations/tasks/task_existing", 200, "original-plugin"},
+		{"GET", "/doubao/api/v3/contents/generations/tasks", 401, ""},
+		{"DELETE", "/doubao/api/v3/contents/generations/tasks/task_existing", 401, ""},
+		{"POST", "/doubao/api/v3/assets/?Action=ListAssets&Version=2024-01-01", 401, ""},
+		{"GET", "/v1/seedance/capabilities", 401, ""},
+		{"POST", "/v1/seedance/uploads/presign", 401, ""},
+		{"POST", "/v1/seedance/uploads/jdu_someone/complete", 401, ""},
+		{"GET", "/v1/videos", 401, ""},
+		{"DELETE", "/v1/videos/task_existing", 401, ""},
+		{"GET", "/unrelated-page", 200, "web"},
+	} {
+		t.Run(tc.method+tc.path, func(t *testing.T) {
+			w := performPluginRequest(outer, tc.method, tc.path)
+			assert.Equal(t, tc.code, w.Code, w.Body.String())
+			if tc.body != "" {
+				assert.Equal(t, tc.body, w.Body.String())
+			}
+		})
+	}
+}

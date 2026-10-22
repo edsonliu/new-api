@@ -1,5 +1,6 @@
 """Verify release authorization against real Git objects, without deployment."""
 import json
+import hashlib
 from pathlib import Path
 import shutil
 import subprocess
@@ -57,6 +58,16 @@ class ReleaseGateTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate('0'*40, oid, ref, root)
             stage['image_id'] = manifest['image_id']
+            save()
+            (artifact / 'runtime.env').write_text('JDOTOKEN_SEEDANCE_UPLOAD_SECRET=fixture-only')
+            manifest['runtime_sha256'] = hashlib.sha256((artifact / 'runtime.env').read_bytes()).hexdigest()
+            stage['runtime_sha256'] = manifest['runtime_sha256']
+            save()
+            self.assertEqual(validate('0'*40, oid, ref, root), tag)
+            (artifact / 'runtime.env').write_text('changed')
+            with self.assertRaises(ValueError):
+                validate('0'*40, oid, ref, root)
+            del manifest['runtime_sha256']
             save()
             (root / 'bin' / 'deploy.py').write_text('changed')
             with self.assertRaises(ValueError):
