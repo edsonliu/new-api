@@ -1,4 +1,4 @@
-"""Publish only the JDOTOKEN application image with drain, backup and rollback."""
+"""Publish JDOTOKEN application images or isolated static documentation via tags."""
 import sys
 import re
 import fcntl
@@ -20,12 +20,17 @@ fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
 root = release_root/'artifacts'/tag
 manifest = json.loads((root/'manifest.json').read_text())
 version = tag
-image = manifest['image']
 repo = release_root/'repository.git'
 commit = subprocess.check_output(['git','--git-dir',str(repo),'rev-parse',f'refs/tags/{tag}^{{commit}}'],text=True).strip()
 assert commit == manifest['commit']
 assert manifest['version'] == tag and manifest['target'] == '115.29.196.54'
 assert manifest['validated'] is True
+if manifest.get('release_type') == 'docs':
+    from docs_release import publish_docs
+    publish_docs(root, repo, commit, manifest)
+    sys.exit(0)
+assert manifest.get('release_type', 'app') == 'app'
+image = manifest['image']
 image_meta = json.loads(subprocess.check_output(['docker','image','inspect',image]))[0]
 assert image_meta['Id'] == manifest['image_id']
 assert image_meta['Config']['Labels']['org.opencontainers.image.revision'] == commit

@@ -31,17 +31,26 @@ def validate(old, new, ref, root=ROOT):
             or manifest.get('target') != '115.29.196.54'
             or manifest.get('validated') is not True):
         raise ValueError('Release manifest does not authorize this exact commit and target')
-    if (stage.get('success') is not True or stage.get('version') != tag
+    release_type = manifest.get('release_type', 'app')
+    if release_type not in ('app', 'docs'):
+        raise ValueError('Unknown release type')
+    scripts = ['receive.py', 'deploy.py']
+    if release_type == 'docs':
+        scripts.append('docs_release.py')
+    for filename in scripts:
+        committed = git('show', commit + ':deployment/jdtoken/' + filename)
+        if committed != (root / 'bin' / filename).read_bytes():
+            raise ValueError('Installed delivery script differs from tagged source')
+    if release_type == 'docs':
+        from docs_release import validate_docs
+        validate_docs(repo, commit, artifact, manifest, stage)
+    elif (stage.get('success') is not True or stage.get('version') != tag
             or stage.get('image_id') != manifest.get('image_id')):
         raise ValueError('This image has not passed the production-copy rehearsal')
     if manifest.get('runtime_sha256'):
         actual = hashlib.sha256((artifact / 'runtime.env').read_bytes()).hexdigest()
         if actual != manifest['runtime_sha256'] or stage.get('runtime_sha256') != actual:
             raise ValueError('Runtime configuration differs from the rehearsed release')
-    for filename in ('receive.py', 'deploy.py'):
-        committed = git('show', commit + ':deployment/jdtoken/' + filename)
-        if committed != (root / 'bin' / filename).read_bytes():
-            raise ValueError('Installed delivery script differs from tagged source')
     if (artifact / 'deployment-result.json').exists():
         raise ValueError('Release has already been deployed')
     return tag
