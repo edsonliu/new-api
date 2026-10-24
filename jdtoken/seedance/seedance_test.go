@@ -184,6 +184,7 @@ type assetFixture struct {
 	calls map[string]int
 	path  string
 	html  bool
+	delay time.Duration
 }
 
 func newProvider(t *testing.T, ch *model.Channel, path string) *assetFixture {
@@ -203,6 +204,7 @@ func newProvider(t *testing.T, ch *model.Channel, path string) *assetFixture {
 		require.NoError(t, common.DecodeJson(r.Body, &in))
 		a := r.URL.Query().Get("Action")
 		f.calls[a]++
+		time.Sleep(f.delay)
 		w.Header().Set("Content-Type", "application/json")
 		id, _ := in["Id"].(string)
 		row := f.rows[id]
@@ -704,4 +706,130 @@ func TestReleasedDatabaseUpgrade(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, sqlDB.Close())
 	}
+}
+
+// Reproduce the production burst: multiple creates and status polls share a
+// group. Each logical create must reach the provider exactly once despite
+// simultaneous retries with the same key.
+func TestMaterialConcurrentBatchAndReplay(t *testing.T) {
+	r, ch := setupFeature(t)
+	provider := newProvider(t, ch, "/api/v3/assets/")
+	code, out := action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "batch"}, "batch-group", false)
+	gid := resultID(t, code, out)
+	code, out = action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/poll.png"}, "poll", false)
+	aid := resultID(t, code, out)
+	provider.mu.Lock()
+	provider.delay = 40 * time.Millisecond
+	provider.mu.Unlock()
+	// An earlier request owns the group when the burst arrives.
+	require.NoError(t, model.DB.Model(&model.JDSeedanceResource{}).Where("id = ?", gid).Update("busy_until", time.Now().Unix()+120).Error)
+	var wg sync.WaitGroup
+	ids := make([]string, 12)
+	for i := range 12 {
+		wg.Go(func() {
+			key := "batch-" + strconv.Itoa(i/2)
+			code, out := action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/" + key + ".png"}, key, false)
+			ids[i] = resultID(t, code, out)
+		})
+	}
+	for range 6 {
+		wg.Go(func() {
+			code, out := action(t, r, "GetAsset", map[string]any{"Id": aid}, "", false)
+			assert.Equal(t, 200, code, out)
+		})
+	}
+	time.Sleep(100 * time.Millisecond)
+	require.NoError(t, model.DB.Model(&model.JDSeedanceResource{}).Where("id = ?", gid).Update("busy_until", 0).Error)
+	wg.Wait()
+	for i := range 6 {
+		assert.NotEmpty(t, ids[2*i])
+		assert.Equal(t, ids[2*i], ids[2*i+1])
+	}
+	provider.mu.Lock()
+	assert.Equal(t, 7, provider.calls["CreateAsset"])
+	assert.Equal(t, 6, provider.calls["GetAsset"])
+	provider.mu.Unlock()
+	code, out = action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/changed.png"}, "batch-0", false)
+	require.Equal(t, 409, code, out)
+	assert.Equal(t, "idempotency_conflict", out["error"].(map[string]any)["code"])
+	var group model.JDSeedanceResource
+	require.NoError(t, model.DB.First(&group, "id = ?", gid).Error)
+	assert.Zero(t, group.BusyUntil)
+	// Unconfirmed upstream failures release the group but never resubmit a
+	// creation whose outcome is unknown.
+	provider.mu.Lock()
+	provider.html = true
+	provider.mu.Unlock()
+	failedBody := map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/uncertain.png"}
+	code, out = action(t, r, "CreateAsset", failedBody, "uncertain", false)
+	require.Equal(t, 502, code, out)
+	provider.mu.Lock()
+	provider.html = false
+	provider.mu.Unlock()
+	code, out = action(t, r, "CreateAsset", failedBody, "uncertain", false)
+	require.Equal(t, 409, code, out)
+	assert.Equal(t, "creation_unconfirmed", out["error"].(map[string]any)["code"])
+	code, out = action(t, r, "GetAssetGroup", map[string]any{"Id": gid}, "", false)
+	require.Equal(t, 200, code, out)
+	provider.mu.Lock()
+	assert.Equal(t, 7, provider.calls["CreateAsset"])
+	provider.mu.Unlock()
+}
+
+func TestMaterialContentionDeadlineDeletionAndRecovery(t *testing.T) {
+	r, ch := setupFeature(t)
+	provider := newProvider(t, ch, "/api/v3/assets/")
+	code, out := action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "locked"}, "locked", false)
+	gid := resultID(t, code, out)
+	code, out = action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "independent"}, "independent", false)
+	otherID := resultID(t, code, out)
+	require.NoError(t, model.DB.Model(&model.JDSeedanceResource{}).Where("id = ?", gid).Update("busy_until", time.Now().Unix()+120).Error)
+	code, out = action(t, r, "GetAssetGroup", map[string]any{"Id": otherID}, "", false)
+	require.Equal(t, 200, code, out)
+	code, _ = action(t, r, "GetAssetGroup", map[string]any{"Id": gid}, "", true)
+	require.Equal(t, 404, code)
+	raw, err := common.Marshal(map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/blocked.png"})
+	require.NoError(t, err)
+	for _, deadline := range []time.Duration{80 * time.Millisecond, 20 * time.Second} {
+		ctx, cancel := context.WithTimeout(context.Background(), deadline)
+		req := httptest.NewRequest("POST", "/doubao/api/v3/assets/?Action=CreateAsset&Version="+APIVersion, bytes.NewReader(raw)).WithContext(ctx)
+		req.Header.Set("Idempotency-Key", "blocked")
+		w := httptest.NewRecorder()
+		start := time.Now()
+		r.ServeHTTP(w, req)
+		elapsed := time.Since(start)
+		cancel()
+		assert.Equal(t, 409, w.Code, w.Body.String())
+		assert.Contains(t, w.Body.String(), "resource_busy")
+		assert.Equal(t, "2", w.Header().Get("Retry-After"))
+		if deadline > time.Second {
+			assert.GreaterOrEqual(t, elapsed, 15*time.Second)
+			assert.Less(t, elapsed, 18*time.Second)
+		} else {
+			assert.Less(t, elapsed, time.Second)
+		}
+	}
+	provider.mu.Lock()
+	assert.Zero(t, provider.calls["CreateAsset"])
+	provider.mu.Unlock()
+	var count int64
+	require.NoError(t, model.DB.Model(&model.JDSeedanceResource{}).Where("request_key = ?", "blocked").Count(&count).Error)
+	assert.Zero(t, count, "timed out requests must not reserve a creation")
+	// Expired leases recover without manual cleanup; a retry can use its key.
+	require.NoError(t, model.DB.Model(&model.JDSeedanceResource{}).Where("id = ?", gid).Update("busy_until", time.Now().Unix()-1).Error)
+	code, out = action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/blocked.png"}, "blocked", false)
+	_ = resultID(t, code, out)
+	// A delete winning while a child waits must yield 404, never a late create.
+	require.NoError(t, model.DB.Model(&model.JDSeedanceResource{}).Where("id = ?", gid).Update("busy_until", time.Now().Unix()+120).Error)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		code, out := action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/deleted.png"}, "after-delete", false)
+		assert.Equal(t, 404, code, out)
+	})
+	time.Sleep(100 * time.Millisecond)
+	require.NoError(t, model.DB.Model(&model.JDSeedanceResource{}).Where("id = ?", gid).Updates(map[string]any{"deleted": true, "busy_until": 0}).Error)
+	wg.Wait()
+	provider.mu.Lock()
+	assert.Equal(t, 1, provider.calls["CreateAsset"])
+	provider.mu.Unlock()
 }

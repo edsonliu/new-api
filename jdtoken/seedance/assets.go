@@ -1,10 +1,11 @@
 package seedance
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/QuantumNous/new-api/common"
+	"math/rand/v2"
 	"net/url"
 	"slices"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
@@ -107,19 +109,65 @@ func resourceView(r *model.JDSeedanceResource) map[string]any {
 	}
 	return v
 }
+
+// Retain the database lease across instances so group deletion cannot race a
+// child operation. Brief contention is absorbed here instead of failing batches
+// immediately. Waiting never holds a transaction or extends the owner's lease.
 func acquireResource(c *gin.Context, id string) (func(), error) {
-	now := time.Now().Unix()
-	res := model.DB.Model(&model.JDSeedanceResource{}).Where("id = ? AND user_id = ? AND deleted = ? AND busy_until <= ?", id, userID(c), false, now).Update("busy_until", now+120)
-	if res.Error != nil {
-		return nil, res.Error
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+	for ctx.Err() == nil {
+		now := time.Now().Unix()
+		db := model.DB.WithContext(ctx)
+		res := db.Model(&model.JDSeedanceResource{}).Where("id = ? AND user_id = ? AND deleted = ? AND busy_until <= ?", id, userID(c), false, now).Update("busy_until", now+120)
+		if res.Error != nil {
+			if ctx.Err() != nil {
+				break
+			}
+			return nil, res.Error
+		}
+		if res.RowsAffected == 1 {
+			return func() {
+				// Release independently of a disconnected request's context.
+				model.DB.Model(&model.JDSeedanceResource{}).Where("id = ? AND busy_until = ?", id, now+120).Update("busy_until", 0)
+			}, nil
+		}
+		// A resource deleted while waiting is not a busy resource. Preserve
+		// ownership filtering and avoid waiting the entire deadline for it.
+		var resource model.JDSeedanceResource
+		if err := db.Select("id").Where("id = ? AND user_id = ? AND deleted = ?", id, userID(c), false).First(&resource).Error; err != nil {
+			if ctx.Err() != nil {
+				break
+			}
+			return nil, err
+		}
+		timer := time.NewTimer(time.Duration(100+rand.IntN(151)) * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+		case <-timer.C:
+		}
 	}
-	if res.RowsAffected != 1 {
-		return nil, apiError(409, "resource_busy", "Resource is busy; retry later")
-	}
-	return func() {
-		model.DB.Model(&model.JDSeedanceResource{}).Where("id = ? AND busy_until = ?", id, now+120).Update("busy_until", 0)
-	}, nil
+	c.Header("Retry-After", "2")
+	return nil, apiError(409, "resource_busy", "Resource is busy; retry later")
 }
+
+// Reused before and after waiting: another request can finish the same creation
+// while this request waits for its group, so never blindly submit it upstream.
+func replayCreation(c *gin.Context, kind, key, requestHash string) (any, error) {
+	var existing model.JDSeedanceResource
+	if err := model.DB.Where("user_id = ? AND kind = ? AND request_key = ?", userID(c), kind, key).First(&existing).Error; err != nil {
+		return nil, err
+	}
+	if existing.RequestHash != requestHash {
+		return nil, apiError(409, "idempotency_conflict", "Idempotency-Key was used with a different request")
+	}
+	if existing.UpstreamID != "" && !existing.Deleted {
+		return resourceView(&existing), nil
+	}
+	return nil, apiError(409, "creation_unconfirmed", "This creation key has already been used; check the original operation")
+}
+
 func createAsset(c *gin.Context, cfg Config, kind string, req AssetRequest) (any, error) {
 	key := c.GetHeader("Idempotency-Key")
 	if key == "" || len(key) > 128 {
@@ -131,19 +179,14 @@ func createAsset(c *gin.Context, cfg Config, kind string, req AssetRequest) (any
 	}
 	digest := sha256.Sum256(requestBytes)
 	requestHash := hex.EncodeToString(digest[:])
-	var existing model.JDSeedanceResource
-	err = model.DB.Where("user_id = ? AND kind = ? AND request_key = ?", userID(c), kind, key).First(&existing).Error
-	if err == nil {
-		if existing.RequestHash != requestHash {
-			return nil, apiError(409, "idempotency_conflict", "Idempotency-Key was used with a different request")
-		}
-		if existing.UpstreamID != "" && !existing.Deleted {
-			return resourceView(&existing), nil
-		}
-		return nil, apiError(409, "creation_unconfirmed", "This creation key has already been used; check the original operation")
+	value, replayErr := replayCreation(c, kind, key, requestHash)
+	if replayErr == nil {
+		return value, nil
 	}
-	if err != gorm.ErrRecordNotFound {
-		return nil, err
+	// An in-flight asset creation may finish while we wait for the group.
+	pending, isAPIError := replayErr.(*APIError)
+	if replayErr != gorm.ErrRecordNotFound && !(kind == "asset" && isAPIError && pending.Code == "creation_unconfirmed") {
+		return nil, replayErr
 	}
 	var b Binding
 	var ch *model.Channel
@@ -215,6 +258,10 @@ func createAsset(c *gin.Context, cfg Config, kind string, req AssetRequest) (any
 			return nil, e
 		}
 		defer unlock()
+		value, replayErr = replayCreation(c, kind, key, requestHash)
+		if replayErr != gorm.ErrRecordNotFound {
+			return value, replayErr
+		}
 		// Recheck after acquiring the group lease, including a concurrent deletion.
 		group, err = ownedResource(c, group.ID, "group")
 		if err != nil {

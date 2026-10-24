@@ -46,6 +46,11 @@ JDOTOKEN_SEEDANCE_UPLOAD_SECRET=<独立生成的至少32字符随机密钥>
 
 所有创建必须带 `Idempotency-Key`。同一用户同一类资源、同一 Key 和同一请求重试返回已有资源；请求不同返回 409。上游超时、HTML 200、缺少 ID 等不确定结果不会自动重发创建，原 Key 返回 409，需要管理员核对上游后处理。响应 `Id` 永远为本站 `jdg_` / `jda_` ID。
 
+同素材组内的创建、状态查询、修改和删除保留数据库互斥保护，适用于多实例部署。短时竞争由服务器自动等待，最长 15 秒；请求取消即停止等待，不会在后台继续排队提交。等待超时仍返回 `409 resource_busy`，并携带 `Retry-After: 2`；客户端可在至少 2 秒后加随机退避重试同一请求与同一 `Idempotency-Key`。这只代表等待资源锁超时，不代表上游审核失败。不同组独立处理，列表查询不参与此锁。获取锁后再次检查幂等记录，防止同时重试重复提交；`creation_unconfirmed` 仍需核对上游，不能当作 `resource_busy` 自动换 Key 重发。
+
+2026-10-24 并发修复仅修改本目录的锁等待与幂等复查，未新增表、字段、依赖或上游核心接入点。升级时保留 `busy_until` 的条件更新语义，并回归同组并发提交/查询、幂等、取消、删除和跨用户隔离；旧应用可直接读取现有数据，发布回滚不需数据迁移。
+
+
 ```bash
 curl "$BASE/doubao/api/v3/assets/?Action=CreateAssetGroup&Version=2024-01-01" \
   -H "Authorization: Bearer $JDOTOKEN_KEY" -H 'Content-Type: application/json' \
