@@ -101,12 +101,12 @@ class DocsReleaseTest(unittest.TestCase):
             git('add', '.')
             git('-c', 'user.name=Release test', '-c', 'user.email=release@example.invalid', 'commit', '-m', 'docs')
             commit = git('rev-parse', 'HEAD')
-            tag = 'jdtoken-v2026.10.23.2'
+            subprocess.run(['/usr/bin/python3', str(docs / 'build.py')], check=True, stdout=subprocess.DEVNULL)
+            tag = 'jdtoken-v' + json.loads((docs / 'dist' / 'release.json').read_text())['version']
             git('-c', 'user.name=Release test', '-c', 'user.email=release@example.invalid', 'tag', '-a', tag, '-m', 'docs')
             oid = git('rev-parse', tag)
             repo = root / 'repository.git'
             subprocess.run(['git', 'clone', '--bare', str(source), str(repo)], check=True, capture_output=True)
-            subprocess.run(['/usr/bin/python3', str(docs / 'build.py')], check=True, stdout=subprocess.DEVNULL)
             artifact = root / 'artifacts' / tag
             shutil.copytree(docs / 'dist', artifact / 'docs')
             hashes = file_hashes(artifact / 'docs')

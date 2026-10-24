@@ -25,12 +25,15 @@ example syntax without executing generation requests. It checks layout at deskto
 
 ## Content baseline
 
-Updated 2026-10-23 against `jdtoken/seedance/` and production acceptance evidence in
-workspace `reports/seedance-release-20261023/`. Documents ten material Actions,
+Updated 2026-10-24 against `jdtoken/seedance/` and production acceptance evidence in
+workspace `reports/seedance-release-20261023/`,
+`reports/seedance-media-e2e-20261024/` and `reports/lingxi-audio-reference-20261024/`. Documents ten material Actions,
 capabilities, signed uploads, references, pagination, cancellation and local hiding.
 Service identifiers are public aliases, not internal channel IDs or credentials.
 Keep configured capabilities separate from actual end-to-end tests, particularly
-2.5 draft upgrades, audio, automatic ingestion, real-person verification and callbacks.
+2.5 draft upgrades, unverified audio models, automatic ingestion, real-person verification and callbacks.
+Standard audio URL storage and mini audio asset references have passed acceptance;
+local audio uploads remain disabled. Document these as separate capabilities.
 Always use platform IDs. Pricing links point to the model plaza rather than a frozen
 price table. API paths, versions, ownership, restrictions and response examples must
 be reviewed against implementation and fresh evidence after functional changes.
