@@ -145,9 +145,9 @@ section('视频 API', 'video-workflow', '视频任务流程', '先提交任务�
 
 section('视频 API', 'video-models', 'Seedance 模型与参数', '使用本站公开的完整模型 ID。', table(['模型 ID', '分辨率档位', '时长范围', '验证范围'], [
     ['<code>doubao-seedance-2-0-260128</code>', '480p / 720p / 1080p / 4k', '4–15 秒或 -1', 'standard 15 秒、720p、9:16、4 图＋2 音频＋1 视频素材 ID 生成通过'],
-    ['<code>doubao-seedance-2-0-fast-260128</code>', '480p / 720p', '4–15 秒或 -1', 'fast 提交与取消实测通过；本轮不代表成功成片验收'],
+    ['<code>doubao-seedance-2-0-fast-260128</code>', '480p / 720p', '4–15 秒或 -1', 'standard 图片＋视频＋音频素材 ID 生成通过，4 秒、480p；取消已实测'],
     [f'<code>{MINI}</code>', '480p / 720p', '4–15 秒或 -1', '4 秒、480p 普通视频通过；standard 图片＋音频、图片＋视频＋音频素材 ID 生成通过'],
-    ['<code>doubao-seedance-2-5-260628</code>', '480p / 720p / 1080p', '4–30 秒或 -1', '4 秒、480p 草稿实测通过'],
+    ['<code>doubao-seedance-2-5-260628</code>', '480p / 720p / 1080p', '4–30 秒或 -1', 'standard 图片＋视频＋音频素材 ID 正片生成通过，4 秒、480p；草稿有历史样本'],
 ]) + '''<p>表格中的分辨率和时长来自当前适配能力声明，并不表示所有组合都已实测。<code>-1</code> 表示由模型选择时长；首次调用建议显式设置 4 秒和 480p。具体参数组合仍受上游约束。</p><p>分辨率是生成档位，最终编码宽高可能进行对齐。例如 2.0 mini 的一次 480p 样例实际为 864×496，以下载文件为准。</p>''')
 
 video = {'model': MINI, 'content': [{'type': 'text', 'text': '一个白色与青绿色的小机器人站在蓝色山间草地上，轻轻挥手。镜头固定，动作自然，没有字幕。'}], 'duration': 4, 'resolution': '480p', 'ratio': '16:9', 'draft': False, 'generate_audio': False, 'watermark': False, 'execution_expires_after': 3600}
@@ -209,13 +209,13 @@ ASSETS = '/doubao/api/v3/assets/?Action={}&Version=2024-01-01'
 section('素材与上传', 'capabilities', '查询服务与模型能力', '先查询当前 API Key 可用的服务，再选择素材流程。', code('bash', curl('/v1/seedance/capabilities')) + """
 <p>响应只列出当前令牌有权限使用的服务和模型；空的 data 数组表示没有匹配项。Service 不是模型名称：同一模型在不同服务下的素材、取消、草稿能力可能不同。</p>
 """ + code('json', json.dumps({'object':'list','data':[{'service':'seedance-standard','model':MINI,'material_management':True,'storage_types':['Image','Video','Audio'],'reference_types':['Image','Video','Audio'],'upload':{'enabled':True,'max_bytes':104857600,'expires_seconds':86400,'audio':False},'task_list':True,'task_cancel':True,'task_delete':{'local':True,'upstream':False},'draft':False,'draft_upgrade':False,'mov':False,'frames':False,'automatic_ingestion':False,'real_person_verification':False,'cross_account_copy':False,'verification':'administrator_configured'}],'asset_api_version':'2024-01-01'}, ensure_ascii=False,indent=2)) + table(['服务标识', '当前配置模型', '素材管理 / 引用', '取消生成'], [
- ['<code>seedance-standard</code>', '2.0 mini / 2.0 / 2.0 fast / 2.5', '图片、视频、音频素材库；mini、2.0 可引用三类素材，fast/2.5 仅图片/视频；签名上传仅图片/视频', '已启用；fast 实测取消成功'],
- ['<code>seedance-alternate</code>', '2.0', '图片、视频素材库及上传引用', '未启用'],
- ['<code>seedance-upload</code>', '2.0 mini', '临时上传引用；无独立素材库管理', '未启用'],
-]) + """<p>截至 2026-10-26。三类服务均提供任务列表及终态本地隐藏；2.5 的 draft、draft_upgrade、mov 已配置开放，具体组合的实测范围见兼容说明。verification=administrator_configured 表示管理员配置声明，不表示每个参数组合均已通过实测。storage_types 表示可入库类型，reference_types 表示该模型可用于生成的类型；upload.audio 单独表示本地音频上传。mini、2.0 允许音频素材 ID 引用，不代表音频文件直传开放。调用方应刷新能力列表，不能将类型固定为 Image/Video。以实时能力响应、令牌分组和模型权限为准；需要开通服务时联系管理员。</p>""")
+ ['<code>seedance-standard</code>', '2.0 mini / 2.0 / 2.0 fast / 2.5', '图片、视频、音频素材库；四个模型均可引用三类素材；签名上传仅图片/视频', '已启用；fast 实测取消成功'],
+ ['<code>seedance-alternate</code>', '2.0', '图片、视频、音频素材库；2.0 音频 ID 生成已验证；签名上传仅图片/视频', '未启用'],
+ ['<code>seedance-upload</code>', '2.0 mini', '临时上传流程；无独立素材库；当前上游模型不可用，见兼容说明', '未启用'],
+]) + """<p>截至 2026-10-26。三类服务均提供任务列表及终态本地隐藏；2.5 的 draft、draft_upgrade、mov 已配置开放，具体组合的实测范围见兼容说明。verification=administrator_configured 表示管理员配置声明，不表示每个参数组合均已通过实测。storage_types 表示可入库类型，reference_types 表示该模型可用于生成的类型；upload.audio 单独表示本地音频上传。standard 四个模型及 alternate 2.0 允许音频素材 ID 引用，不代表音频文件直传开放。调用方应刷新能力列表，不能将类型固定为 Image/Video。以实时能力响应、令牌分组和模型权限为准；需要开通服务时联系管理员。</p>""")
 
 section('素材与上传', 'asset-mode', '素材库接入流程', '创建素材组 → 创建素材 → 等待 Active → 引用生成。', """
-<p>本站已提供独立素材库管理，支持图片、视频素材的创建、查询、更新、删除及分页；seedance-standard 另支持音频 URL 入库和同样的管理操作。素材按用户隔离：同一用户的多个 API Key 共享素材，其他用户不可访问。API Key 还须具备所选服务的模型与分组权限。</p>
+<p>本站已提供独立素材库管理，支持图片、视频素材的创建、查询、更新、删除及分页；seedance-standard、seedance-alternate 另支持音频 URL 入库和同样的管理操作。素材按用户隔离：同一用户的多个 API Key 共享素材，其他用户不可访问。API Key 还须具备所选服务的模型与分组权限。</p>
 <ol><li>调用能力查询，选择 material_management=true 的服务。</li><li>创建 AIGC 素材组，保存本站 jdg_ 开头的组 ID。</li><li>通过公网 URL 或已完成上传的 UploadId 创建素材，保存 jda_ 开头的素材 ID。</li><li>轮询 GetAsset，确认 Status=Active 后，用 asset://jda_... 生成。</li></ol>
 """ + note('支持 AIGC 素材组，不提供真人认证、跨账号复制或自动入库承诺。历史 image_source_mode=asset / video_source_mode=asset 属于渠道扩展，不能替代本站素材创建流程；不要据此预期任务结果返回可复用的本站素材 ID。') + """<p>旧的裸上游 asset:// ID 不能直接当作本站素材使用，需要通过本站接口重新创建。本站固定素材所属账号，禁止跨账号混用或自动重试到其他账号；账号凭据改变后可能需要重新入库。</p>""")
 
@@ -275,7 +275,7 @@ print(complete["id"], complete["source"], complete["expires_at"])
 """ + code('json', json.dumps({'GroupId':'jdg_REPLACE','AssetType':'Image','Name':'参考图','UploadId':'jdu_REPLACE'},ensure_ascii=False,indent=2)) + note('state=complete / material_status=not_ingested 仅表示上传完成，不表示素材已经入库或审核为 Active。upload:// 是临时引用；需要复用素材时另行 CreateAsset 并等待 Active。seedance-upload 服务只能直接引用上传文件，不提供独立素材库管理。') + """<p>签名 URL 属于临时访问凭据，请勿公开。PUT 签名不能用于 GET/HEAD；平台在生成时自动给渠道提供相应下载签名，调用方无需自行计算。签名下载支持 GET、HEAD 和 Range（206），与生成视频下载代理的 HEAD 兼容性是不同接口。</p>""")
 
 section('素材与上传', 'asset-reference', '使用素材或上传引用生成', '使用本站 ID 固定素材所属服务和账号。', code('bash', curl(VIDEO, {'model':MINI,'seedance_service':'seedance-standard','content':[{'type':'text','text':'参考图中的小机器人轻轻挥手，镜头固定。'},{'type':'image_url','role':'reference_image','image_url':{'url':'asset://jda_REPLACE'}}],'duration':4,'resolution':'480p','generate_audio':False})) + """
-<p>图片使用 image_url / reference_image，视频使用 video_url / reference_video；standard mini、2.0 音频使用 audio_url / reference_audio。图片、视频引用可为 asset://jda_... 或已完成的 upload://jdu_...；音频目前使用 URL 入库后返回的 asset://jda_...。素材必须归属当前用户、状态 Active、类型受模型支持；临时上传必须尚未过期。</p>
+<p>图片使用 image_url / reference_image，视频使用 video_url / reference_video；standard 四个模型及 alternate 2.0 的音频使用 audio_url / reference_audio。图片、视频引用可为 asset://jda_... 或已完成的 upload://jdu_...；音频目前使用 URL 入库后返回的 asset://jda_...。素材必须归属当前用户、状态 Active、类型受模型支持；临时上传必须尚未过期。</p>
 <p>使用 OpenAI JSON 时，把 content 放入 metadata.content；seedance_service 可放顶层以显式选择能力查询返回的服务。它不能绕过令牌权限。素材或上传引用本身也会固定其账号，不允许混用不同账号。本站最多接收 16 个此类引用，模型可能有更严格数量限制。</p>
 <p>生成后仍使用本站返回的 task_... ID 查询。任务结果中的上游字段不能替代素材创建返回的 jda_... ID。已有草稿若没有可靠的同账号来源，不能与本站素材混用。</p>
 """)
@@ -292,16 +292,17 @@ full_audio_content = [{'type':'text','text':audio_prompt}] + [{'type':'image_url
 full_audio_native = {'seedance_service':'seedance-standard','model':FULL,'content':full_audio_content,'duration':15,'resolution':'720p','ratio':'9:16','generate_audio':True,'image_source_mode':'asset','video_source_mode':'asset'}
 full_audio_openai = {**audio_openai,'model':FULL,'metadata':{**audio_openai['metadata'],'content':[{'type':'text','text':audio_prompt},audio_image,*full_audio_content[5:7]]}}
 section('素材与上传', 'audio-reference', '使用音频素材生成', '音频 URL 入库后，使用素材 ID 配合图片或视频生成。', """
-<p><strong>已验证并开放：seedance-standard 的 doubao-seedance-2-0-mini-260615 与 doubao-seedance-2-0-260128。</strong>2026-10-24 经本站原生接口验证图片＋音频，经 OpenAI 兼容接口验证图片＋视频＋音频：任务均完成，4 秒、480p 成品下载及完整解码通过，包含非静音 AAC 音轨。2026-10-26 已补充完整版 2.0：4 图＋2 音频＋1 视频，15 秒、720p、9:16 原生生成，以及图片＋双音频的 OpenAI 兼容生成均通过本站验证。fast、2.5 及其他服务尚未开放音频引用；纯音频单独生成未验收。</p>
+<p><strong>已验证并开放：seedance-standard 的 mini、2.0、2.0 fast、2.5，以及 seedance-alternate 的 2.0。</strong>2026-10-24 经本站原生接口验证图片＋音频，经 OpenAI 兼容接口验证图片＋视频＋音频：任务均完成，4 秒、480p 成品下载及完整解码通过，包含非静音 AAC 音轨。2026-10-26 已补充完整版 2.0：4 图＋2 音频＋1 视频，15 秒、720p、9:16 原生生成，以及图片＋双音频的 OpenAI 兼容生成均通过本站验证。同日补验 standard fast、2.5 的图片＋视频＋音频素材 ID 生成，以及 alternate 2.0 的图片＋音频素材 ID 生成，均为 4 秒、480p，成品含非静音音轨。纯音频单独生成未验收；seedance-upload 未开放音频素材库。</p>
 <p>先查询 capabilities：服务 storage_types 和所选模型 reference_types 均须包含 Audio。音频 URL 入库、音频 ID 生成、本地音频文件上传是三项独立能力；当前本地音频上传仍未开放。</p>
-<h3 id="audio-ingestion">1. 提交音频素材</h3><p>先按素材 API 示例在 seedance-standard 创建素材组。以下 URL 替换为可公开读取的有效 WAV 地址，GroupId 替换为本站 jdg_ ID；本轮已验证 WAV，不据此保证其他音频格式。相同逻辑创建重试保持请求与 Idempotency-Key 不变，新素材使用新的 Key。</p>
+<h3 id="audio-ingestion">1. 提交音频素材</h3><p>先按素材 API 示例在 seedance-standard 或 seedance-alternate 创建素材组。以下 URL 替换为可公开读取的有效 WAV 地址，GroupId 替换为本站 jdg_ ID；本轮已验证 WAV，不据此保证其他音频格式。相同逻辑创建重试保持请求与 Idempotency-Key 不变，新素材使用新的 Key。</p>
 """ + code('bash', curl(ASSETS.format('CreateAsset'), {'GroupId':'jdg_REPLACE','AssetType':'Audio','Name':'参考音频','URL':'https://your-domain.example/reference.wav'}, extra=' -H "Idempotency-Key: audio-001"')) + code('bash', curl(ASSETS.format('GetAsset'), {'Id':'jda_AUDIO_REPLACE'})) + """
 <p>保存 CreateAsset 返回的 Result.Id。轮询 GetAsset，确认 Result.AssetType=Audio、Result.Status=Active，再使用 asset:// 加上该本站 ID。素材列表可用 AssetType=Audio 过滤；创建、查询、更新、列表、幂等及删除均已验证。</p>
 <h3 id="audio-native">2. 原生接口：图片＋音频</h3><p>替换下列图片与音频 ID。它们必须归属当前用户和同一服务账号，并均处于 Active。audio_url 是 content 中的素材项类型；generate_audio=true 请求输出带声音的视频，不能替代音频素材引用。</p>
 """ + code('bash', curl(VIDEO, audio_native)) + '<h3 id="audio-native-three">原生接口：图片＋视频＋音频</h3><p>在上述结构中增加 video_url / reference_video。三类素材组合已通过本站 OpenAI 兼容入口验收；此处为对应原生请求写法。</p>' + code('bash', curl(VIDEO, {**audio_native,'content':audio_all_content})) + '<h3 id="audio-openai">3. OpenAI 兼容接口</h3><p>扩展参数放入 metadata，服务和公开模型名称与原生接口相同。下面先给出图片＋音频写法，再给出本轮通过 OpenAI 入口实测的三类素材组合。</p>' + code('bash', curl('/v1/videos', audio_openai)) + code('bash', curl('/v1/videos', {**audio_openai,'metadata':{**audio_openai['metadata'],'content':audio_all_content}})) + """
 """ + '<h3 id="audio-full">4. 完整版 2.0：多素材与双音频</h3><p>以下原生结构已用独立合成素材完成本站验证：4 张图片、2 段不同音频、1 段视频，15 秒、720p、9:16。请替换全部 ID，模型保持完整版 2.0，无需改成 mini。实测支持该输入结构，不保证任意人物素材、声音模仿或复杂分镜均能通过上游审核或完全按提示生成。</p>' + code('bash', curl(VIDEO, full_audio_native)) + '<p>完整版 OpenAI 兼容双音频示例（4 秒、480p）：</p>' + code('bash', curl('/v1/videos', full_audio_openai)) + note('reference_video 会作为真实视频参考发送。若视频只是调用方的占位内容，应从 content 删除该项；提示词中的“请勿参考”不会让网关移除它。') + """
+""" + '<h3 id="audio-model-matrix">5. fast、2.5 与 alternate 2.0</h3><p>以下三种组合已分别完成本站真实生成、查询、下载和音轨校验。fast 与 2.5 示例均为图片＋视频＋音频，4 秒、480p；alternate 2.0 示例为图片＋音频。请以相应服务创建的新素材 ID 替换示例，不能复用另一个服务的 ID。</p>' + code('bash', curl(VIDEO, {**audio_native,'model':'doubao-seedance-2-0-fast-260128','content':audio_all_content})) + code('bash', curl('/v1/videos', {**audio_openai,'model':'doubao-seedance-2-5-260628','metadata':{**audio_openai['metadata'],'content':audio_all_content}})) + code('bash', curl(ASSETS.format('CreateAssetGroup'), {'Service':'seedance-alternate','Model':FULL,'Name':'音频参考素材组'}, extra=' -H "Idempotency-Key: alternate-audio-project-001"')) + code('bash', curl(VIDEO, {**audio_native,'seedance_service':'seedance-alternate','model':FULL})) + note('seedance-upload 未接入独立素材库；2026-10-26 对应上游账号访问 Ark 素材接口返回 403 manju_gt_not_enabled。同日该渠道四个 Seedance 模型的生成请求均返回 503 model_not_found，当前账号可见模型列表为空，暂不应选择此服务生成。需要上游恢复账号模型及素材权限；本地能力声明或开放 Audio 类型不能解决。') + """
 <p>创建成功仅表示受理。保存本站 task_ ID，用原生接口查询至 succeeded，或用 OpenAI 接口查询至 completed，再通过 /v1/videos/{id}/content 下载。含音轨不保证生成音频逐字、逐采样复现参考内容。</p>
-""" + note('此前 422 unsupported_reference 的原因是模型 reference_types 未包含 Audio；standard mini、完整版 2.0 现已开放。若仍出现该错误，核对 service、完整模型 ID 及实时能力响应。若客户端在发送请求前报“仅支持 Image/Video”，应更新调用方本地类型校验。其他错误与重试方式见<a href="#audio-errors">音频排错</a>。'))
+""" + note('此前 422 unsupported_reference 的原因是模型 reference_types 未包含 Audio；standard 四个模型及 alternate 2.0 现已开放。若仍出现该错误，核对 service、完整模型 ID 及实时能力响应。若客户端在发送请求前报“仅支持 Image/Video”，应更新调用方本地类型校验。其他错误与重试方式见<a href="#audio-errors">音频排错</a>。'))
 
 openai_video = {'model': MINI, 'prompt':'参考图片中的机器人轻轻挥手，镜头固定。', 'seconds':4, 'metadata':{'resolution':'480p','ratio':'16:9','draft':False,'generate_audio':False,'watermark':False,'return_last_frame':True,'execution_expires_after':3600,'content':[{'type':'image_url','role':'reference_image','image_url':{'url':'https://your-domain.example/character.jpg'}}]}}
 section('视频 API', 'openai-video', 'OpenAI 视频接口', '使用 JSON 创建任务，Seedance 扩展参数放进 metadata。', '<div class="endpoint"><span class="method">POST</span><code>/v1/videos</code></div>' + code('bash', curl('/v1/videos', openai_video)) + note('已确认顶层 <code>ratio</code> 和 <code>return_last_frame</code> 会被忽略。请像示例一样把分辨率、比例、音频、水印、尾帧和素材模式放入 <code>metadata</code>。本地 multipart 文件直传尚未开放；可先通过签名上传获得 upload:// 引用。metadata.content 也可使用本站 asset:// 素材、HTTPS URL 或图片 Base64 data URL。音频素材 ID 的两种组合见<a href="#audio-openai">音频 OpenAI 示例</a>。') + '''
@@ -404,7 +405,7 @@ section('用量与排错', 'errors', '错误处理与限制', '先确认错误�
 ]) + '''<p>新增素材与上传接口的错误通常为 {"error":{"code":"错误码","message":"说明"}}；错误语言可能随请求设置变化，请优先依据 code 判断。以上是排查方向，不保证所有上游错误使用相同 HTTP 状态。限流、上下文长度、文件大小、并发和素材规则取决于账户、模型及上游，不存在适用于所有模型的统一数值。</p>
 <h3 id="audio-errors">音频与素材引用排错</h3>
 ''' + table(['错误码 / 表现','处理方式'], [
- ['422 unsupported_reference', '所选模型未开放该素材类型；确认 seedance-standard、mini 或完整版 2.0 的完整模型 ID，刷新 capabilities。'],
+ ['422 unsupported_reference', '所选模型未开放该素材类型；确认 standard 四个模型或 alternate 2.0 的完整模型 ID，刷新 capabilities；素材须属于所选服务。'],
  ['422 reference_type_mismatch', '音频 ID 必须放在 audio_url 字段；不要放在 image_url 或 video_url。'],
  ['409 asset_not_active / asset_not_ready', '生成前调用 GetAsset，等待素材创建确认且 Status=Active。'],
  ['409 reference_account_conflict / account_changed', '核对素材与所选服务、账号；同一请求的素材必须属于同一服务账号，凭据变动后可能需要重新入库。'],
@@ -420,7 +421,8 @@ section('用量与排错', 'compatibility', '兼容范围与已知限制', '截�
  ['取消任务', 'standard fast 实测确认取消、结算与退款核对通过', '其他配置支持模型以实时 task_cancel 为准；alternate / upload 未启用。'],
  ['原生 v3 / OpenAI JSON 创建与查询', '三类服务真实视频验收通过', '扩展参数放 metadata；素材和上传引用可固定服务。'],
  ['图片 URL、Base64 首帧、参考视频、历史 asset 模式', 'mini 历史样本已验证', '不代表自动生成或返回本站素材 ID。'],
- ['音频 URL 入库 / 素材 ID 引用', 'standard 音频管理、mini 音频组合通过；2.0 的 15 秒/720p/4 图＋2 音频＋1 视频及 OpenAI 双音频通过，成品含音轨', '音频先入库并等待 Active；audio_url / reference_audio。fast、2.5 及其他服务未开放音频引用。'],
+ ['音频 URL 入库 / 素材 ID 引用', 'standard 四个模型均通过音频组合；alternate 2.0 图片＋音频通过。标准 2.0 另通过 15 秒/720p/4 图＋2 音频＋1 视频', '先入库并等待 Active；使用 audio_url / reference_audio；素材不可跨服务混用。'],
+ ['seedance-upload 当前可用性', '2026-10-26：对应渠道四个 Seedance 模型均 503 model_not_found；素材接口 403 manju_gt_not_enabled', '需上游恢复账号权限；历史成功样本不代表当前可用。'],
  ['本地 multipart 文件直传 / 本地音频签名上传', '尚未开放', '图片/视频文件先走签名上传；音频使用 URL 入库，upload.audio=false。'],
  ['真人库认证 / 自动入库 / 跨账号复制 / frames', '当前未开放', '不承诺与任何渠道全部扩展接口等价。'],
  ['2.5 草稿 / 草稿转正片 / MOV 输出', '能力已配置；草稿有历史成功样本，转正片未完成本站成功验收', '先查能力；本轮未重复验收这些生成组合。'],
@@ -433,6 +435,6 @@ section('用量与排错', 'compatibility', '兼容范围与已知限制', '截�
 ]) + '<p>素材权限隔离、幂等、上传重放拦截及取消结算均已验证。表中服务范围以能力查询为准；管理员配置声明不等于所有模型、素材与参数组合均已实测。</p>')
 
 section('用量与排错', 'changelog', '文档更新', '记录接口说明与验证范围的变化。', '''
-<h3 id="release-20261026-audio">2026-10-26 · 完整版 2.0 音频素材引用</h3><ul><li>standard 的完整版 2.0 新增 Audio 引用，mini 保持支持。</li><li>补充原生 15 秒、720p、9:16、多图片与双音频组合，以及 OpenAI 双音频示例。</li><li>更新模型能力、422 排查和已知限制；说明占位视频仍会作为参考发送。</li></ul><h3 id="release-20261024-audio">2026-10-24 · 音频素材入库与 mini 引用生成</h3><ul><li>更新 standard 的音频入库、mini 音频素材 ID 引用能力和实时能力响应示例。</li><li>新增 WAV URL 入库、图片＋音频及图片＋视频＋音频的原生/OpenAI 请求写法，标明实际验收入口。</li><li>补充 422 类型限制、Active 状态、跨服务引用与客户端类型缓存排查；保留本地音频直传未开放的限制。</li><li>补充 resource_busy 的 Retry-After 与同幂等 Key 重试说明。</li></ul><h3 id="release-20261023">2026-10-23 · 素材管理第一阶段上线</h3><ul><li>新增服务能力查询、素材与素材组十个 Action、幂等与用户归属说明。</li><li>新增本地签名上传、upload:// 与 asset:// 引用生成示例。</li><li>更新任务分页、筛选、取消与终态隐藏语义；移除这些接口尚未开放的旧结论。</li><li>按本轮生产回归更新各服务验证范围，区分配置声明和端到端实测。</li></ul><h3 id="release-20261012-verified">2026-10-12 · 实测更新</h3><ul><li>补充 mini OpenAI JSON、图片 / 视频 asset、Base64 首帧、尾帧和失败详情说明。</li><li>标注旧版创建、上传、列表、取消和对账的明确限制，新增协议响应差异。</li><li>修正下载命令，说明 metadata 参数写法、HEAD 和 MIME 兼容问题。</li><li>更新官方 Logo、公安备案信息与文档布局。</li></ul><h3 id="release-20261012">2026-10-12 · 首版</h3><ul><li>新增快速开始、鉴权、模型目录、对话与流式接入说明。</li><li>新增 Seedance 创建、图片参考、查询、下载与草稿示例。</li><li>根据真实任务记录标注 2.0 mini 与 2.5 的验证范围。</li><li>说明计费、重复提交风险及尚未开放的扩展能力。</li></ul>
+<h3 id="release-20261026-audio-matrix">2026-10-26 · 音频模型覆盖检查</h3><ul><li>补齐 standard fast、2.5 音频引用，以及 alternate 2.0 音频入库和引用。</li><li>新增三种通过本站实际成片验收的请求示例；保留素材账号隔离和本地音频直传限制。</li><li>说明 seedance-upload 上游账号素材权限阻断，未将受理或配置声明当作成功验收。</li></ul><h3 id="release-20261026-audio">2026-10-26 · 完整版 2.0 音频素材引用</h3><ul><li>standard 的完整版 2.0 新增 Audio 引用，mini 保持支持。</li><li>补充原生 15 秒、720p、9:16、多图片与双音频组合，以及 OpenAI 双音频示例。</li><li>更新模型能力、422 排查和已知限制；说明占位视频仍会作为参考发送。</li></ul><h3 id="release-20261024-audio">2026-10-24 · 音频素材入库与 mini 引用生成</h3><ul><li>更新 standard 的音频入库、mini 音频素材 ID 引用能力和实时能力响应示例。</li><li>新增 WAV URL 入库、图片＋音频及图片＋视频＋音频的原生/OpenAI 请求写法，标明实际验收入口。</li><li>补充 422 类型限制、Active 状态、跨服务引用与客户端类型缓存排查；保留本地音频直传未开放的限制。</li><li>补充 resource_busy 的 Retry-After 与同幂等 Key 重试说明。</li></ul><h3 id="release-20261023">2026-10-23 · 素材管理第一阶段上线</h3><ul><li>新增服务能力查询、素材与素材组十个 Action、幂等与用户归属说明。</li><li>新增本地签名上传、upload:// 与 asset:// 引用生成示例。</li><li>更新任务分页、筛选、取消与终态隐藏语义；移除这些接口尚未开放的旧结论。</li><li>按本轮生产回归更新各服务验证范围，区分配置声明和端到端实测。</li></ul><h3 id="release-20261012-verified">2026-10-12 · 实测更新</h3><ul><li>补充 mini OpenAI JSON、图片 / 视频 asset、Base64 首帧、尾帧和失败详情说明。</li><li>标注旧版创建、上传、列表、取消和对账的明确限制，新增协议响应差异。</li><li>修正下载命令，说明 metadata 参数写法、HEAD 和 MIME 兼容问题。</li><li>更新官方 Logo、公安备案信息与文档布局。</li></ul><h3 id="release-20261012">2026-10-12 · 首版</h3><ul><li>新增快速开始、鉴权、模型目录、对话与流式接入说明。</li><li>新增 Seedance 创建、图片参考、查询、下载与草稿示例。</li><li>根据真实任务记录标注 2.0 mini 与 2.5 的验证范围。</li><li>说明计费、重复提交风险及尚未开放的扩展能力。</li></ul>
 <p>最后核对日期：2026-10-26。模型与价格可能先于文档更新，以账户实时列表和控制台为准。</p>
 ''')
