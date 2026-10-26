@@ -176,3 +176,5 @@ jdtoken.seedance.use_url_or_uploadid_not_both: "URL 与 UploadId 只能选择一
 jdtoken.seedance.use_an_owned_jdotoken_material_identifier: "请使用归属于自己的 JDOTOKEN 素材标识"
 jdtoken.seedance.version_must_be_2024_01_01: "Version 必须为 2024-01-01"
 jdtoken.seedance.material_reference_type_mismatch: "素材类型与引用字段不匹配"
+
+jdtoken.seedance.upstream_resource_conflict: "上游素材已绑定到其他素材记录，无法在当前范围内复用"

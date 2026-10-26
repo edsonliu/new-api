@@ -8,6 +8,7 @@ import (
 // English source text keeps provider-neutral errors readable at call sites;
 // locale IDs live in the host registry so all three backend languages are checked.
 var messageIDs = map[string]string{
+	"Upstream resource is already bound to another material":                                  i18n.MsgJDSeedanceUpstreamResourceConflict,
 	"Material type does not match its reference field":                                        i18n.MsgJDSeedanceMaterialReferenceTypeMismatch,
 	"All references must belong to the selected service":                                      i18n.MsgJDSeedanceAllReferencesMustBelongToTheSelectedService,
 	"AssetType must be Image, Video or Audio":                                                 i18n.MsgJDSeedanceAssettypeMustBeImageVideoOrAudio,

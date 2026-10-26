@@ -162,10 +162,54 @@ func replayCreation(c *gin.Context, kind, key, requestHash string) (any, error) 
 	if existing.RequestHash != requestHash {
 		return nil, apiError(409, "idempotency_conflict", "Idempotency-Key was used with a different request")
 	}
+	if existing.Status == "Conflict" {
+		return nil, apiError(409, "upstream_resource_conflict", "Upstream resource is already bound to another material")
+	}
+	if existing.CanonicalID != "" {
+		var canonical model.JDSeedanceResource
+		err := model.DB.Where("id = ? AND user_id = ? AND kind = ? AND group_id = ? AND binding = ? AND channel_id = ? AND account_hash = ? AND asset_type = ? AND deleted = ?",
+			existing.CanonicalID, existing.UserID, existing.Kind, existing.GroupID, existing.Binding, existing.ChannelID, existing.AccountHash, existing.AssetType, false).First(&canonical).Error
+		if err == nil && canonical.UpstreamIdentity != nil && canonical.UpstreamID != "" && canonical.CanonicalID == "" {
+			return resourceView(&canonical), nil
+		}
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return nil, err
+		}
+		return nil, apiError(409, "creation_unconfirmed", "This creation key has already been used; check the original operation")
+	}
 	if existing.UpstreamID != "" && !existing.Deleted {
 		return resourceView(&existing), nil
 	}
 	return nil, apiError(409, "creation_unconfirmed", "This creation key has already been used; check the original operation")
+}
+
+// A provider may deduplicate creates even when the caller uses another key or
+// URL. Keep one resource owner and one deletion handle; only compatible creates
+// in the same owned group may replay that handle. Never delete the shared
+// upstream resource when recording a rejected creation.
+func reuseUpstreamResource(r *model.JDSeedanceResource, identity string) (any, error) {
+	var existing model.JDSeedanceResource
+	if err := model.DB.Where("upstream_identity = ?", identity).First(&existing).Error; err != nil {
+		return nil, err
+	}
+	compatible := r.Kind == "asset" && existing.Kind == r.Kind && existing.UserID == r.UserID &&
+		existing.GroupID == r.GroupID && existing.Binding == r.Binding && existing.ChannelID == r.ChannelID &&
+		existing.AccountHash == r.AccountHash && existing.AssetType == r.AssetType &&
+		existing.UpstreamID == r.UpstreamID && !existing.Deleted && existing.CanonicalID == ""
+	updates := map[string]any{"deleted": true, "status": "Conflict", "updated_at": time.Now().Unix()}
+	if compatible {
+		updates["canonical_id"] = existing.ID
+		updates["status"] = "Reused"
+	}
+	// The group lease serializes same-group creation/deletion. The reservation
+	// stays hidden, retaining its original request hash for future key replays.
+	if err := model.DB.Model(&model.JDSeedanceResource{}).Where("id = ? AND upstream_identity IS NULL", r.ID).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	if compatible {
+		return resourceView(&existing), nil
+	}
+	return nil, apiError(409, "upstream_resource_conflict", "Upstream resource is already bound to another material")
 }
 
 func createAsset(c *gin.Context, cfg Config, kind string, req AssetRequest) (any, error) {
@@ -311,8 +355,18 @@ func createAsset(c *gin.Context, cfg Config, kind string, req AssetRequest) (any
 	if status, ok := out["Status"].(string); ok {
 		r.Status = normalizeAssetStatus(status)
 	}
+	value, reuseErr := reuseUpstreamResource(&r, identity)
+	if reuseErr != gorm.ErrRecordNotFound {
+		return value, reuseErr
+	}
 	err = model.DB.Model(&r).Updates(map[string]any{"upstream_id": r.UpstreamID, "upstream_identity": identity, "status": r.Status, "updated_at": time.Now().Unix()}).Error
 	if err != nil {
+		// Another group/user may have claimed this identity after the lookup.
+		// Resolve only an actual identity collision; retain other database errors.
+		value, reuseErr = reuseUpstreamResource(&r, identity)
+		if reuseErr != gorm.ErrRecordNotFound {
+			return value, reuseErr
+		}
 		return nil, err
 	}
 	return resourceView(&r), nil

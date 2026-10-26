@@ -175,3 +175,5 @@ jdtoken.seedance.use_url_or_uploadid_not_both: "Use URL or UploadId, not both"
 jdtoken.seedance.use_an_owned_jdotoken_material_identifier: "Use an owned JDOTOKEN material identifier"
 jdtoken.seedance.version_must_be_2024_01_01: "Version must be 2024-01-01"
 jdtoken.seedance.material_reference_type_mismatch: "Material type does not match its reference field"
+
+jdtoken.seedance.upstream_resource_conflict: "Upstream resource is already bound to another material"

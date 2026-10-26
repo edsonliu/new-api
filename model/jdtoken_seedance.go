@@ -22,15 +22,18 @@ type JDSeedanceResource struct {
 	AccountHash      string  `gorm:"size:64;not null"`
 	UpstreamID       string  `gorm:"size:256"`
 	UpstreamIdentity *string `gorm:"size:64;uniqueIndex:uk_jds_upstream"`
-	AssetType        string  `gorm:"size:16"`
-	Name             string  `gorm:"size:256"`
-	Description      string  `gorm:"size:1024"`
-	Status           string  `gorm:"size:32"`
-	SourceURL        string  `gorm:"type:text"`
-	Deleted          bool    `gorm:"not null;index"`
-	BusyUntil        int64   `gorm:"not null"`
-	CreatedAt        int64
-	UpdatedAt        int64
+	// Hidden idempotency records point at the one owned, deletable resource.
+	// They never hold an upstream identity or appear in material lists.
+	CanonicalID string `gorm:"size:64"`
+	AssetType   string `gorm:"size:16"`
+	Name        string `gorm:"size:256"`
+	Description string `gorm:"size:1024"`
+	Status      string `gorm:"size:32"`
+	SourceURL   string `gorm:"type:text"`
+	Deleted     bool   `gorm:"not null;index"`
+	BusyUntil   int64  `gorm:"not null"`
+	CreatedAt   int64
+	UpdatedAt   int64
 }
 
 func (JDSeedanceResource) TableName() string { return "jdtoken_seedance_resources" }

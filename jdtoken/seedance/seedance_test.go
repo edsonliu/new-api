@@ -179,12 +179,13 @@ func resultID(t *testing.T, code int, out map[string]any) string {
 }
 
 type assetFixture struct {
-	mu    sync.Mutex
-	rows  map[string]map[string]any
-	calls map[string]int
-	path  string
-	html  bool
-	delay time.Duration
+	mu      sync.Mutex
+	rows    map[string]map[string]any
+	calls   map[string]int
+	path    string
+	html    bool
+	delay   time.Duration
+	reuseID string
 }
 
 func newProvider(t *testing.T, ch *model.Channel, path string) *assetFixture {
@@ -211,6 +212,10 @@ func newProvider(t *testing.T, ch *model.Channel, path string) *assetFixture {
 		out := map[string]any{}
 		switch a {
 		case "CreateAssetGroup", "CreateAsset":
+			if a == "CreateAsset" && f.reuseID != "" {
+				out = map[string]any{"Id": f.reuseID}
+				break
+			}
 			id = "provider-" + strconv.Itoa(len(f.rows)+f.calls[a]+1)
 			row = map[string]any{"Id": id, "Name": in["Name"], "Status": "Active", "URL": "https://provider.invalid/private-link", "GroupId": in["GroupId"]}
 			f.rows[id] = row
@@ -659,7 +664,7 @@ func TestOrdinaryVideoOptionsUseConfiguredModelCapabilities(t *testing.T) {
 	assert.Equal(t, ch.Key, task.PrivateData.Key)
 }
 
-// Run only after creating a fixture with the actual jdtoken-v2026.10.22.1
+// Run only after creating a fixture with an actual released
 // source. This test never clears rows, unlike the ordinary isolated fixtures.
 func TestReleasedDatabaseUpgrade(t *testing.T) {
 	dsn := os.Getenv("JD_RELEASED_UPGRADE_DSN")
@@ -700,6 +705,28 @@ func TestReleasedDatabaseUpgrade(t *testing.T) {
 		assert.Empty(t, task.PrivateData.SeedanceAccountHash)
 		assert.True(t, model.DB.Migrator().HasIndex(&model.JDSeedanceResource{}, "uk_jds_request"))
 		assert.True(t, model.DB.Migrator().HasIndex(&model.JDSeedanceResource{}, "uk_jds_upstream"))
+
+		if os.Getenv("JD_ASSET_UPGRADE_FIXTURE") == "1" {
+			require.True(t, model.DB.Migrator().HasColumn(&model.JDSeedanceResource{}, "canonical_id"))
+			var asset model.JDSeedanceResource
+			require.NoError(t, model.DB.First(&asset, "id = ?", "released-image").Error)
+			assert.Empty(t, asset.CanonicalID)
+			assert.False(t, asset.Deleted)
+			assert.Equal(t, "Active", asset.Status)
+			assert.Equal(t, "released-provider-image", asset.UpstreamID)
+			assert.Equal(t, strings.Repeat("a", 64), *asset.UpstreamIdentity)
+			assert.Equal(t, "https://example.invalid/image.png", asset.SourceURL)
+			alias := model.JDSeedanceResource{ID: "upgrade-replay", UserID: 9101, Kind: "asset", RequestKey: "upgrade-key", RequestHash: "upgrade-hash", Binding: "primary", AccountHash: asset.AccountHash, CanonicalID: asset.ID, Deleted: true, Status: "Reused"}
+			require.NoError(t, model.DB.Where("id = ?", alias.ID).FirstOrCreate(&alias).Error)
+			collision := asset
+			collision.ID = "upstream-collision"
+			collision.RequestKey = "new-key"
+			assert.Error(t, model.DB.Create(&collision).Error)
+			collision.ID = "key-collision"
+			collision.UpstreamIdentity = nil
+			collision.RequestKey = asset.RequestKey
+			assert.Error(t, model.DB.Create(&collision).Error)
+		}
 		assert.True(t, model.DB.Migrator().HasTable(&model.JDSeedanceUpload{}))
 		assert.True(t, model.DB.Migrator().HasTable(&model.JDSeedanceTaskDeletion{}))
 		sqlDB, err := model.DB.DB()
@@ -832,4 +859,118 @@ func TestMaterialContentionDeadlineDeletionAndRecovery(t *testing.T) {
 	provider.mu.Lock()
 	assert.Equal(t, 1, provider.calls["CreateAsset"])
 	provider.mu.Unlock()
+}
+
+func TestMaterialProviderDeduplicationReplaysCanonicalAsset(t *testing.T) {
+	r, ch := setupFeature(t)
+	provider := newProvider(t, ch, "/api/v3/assets/")
+	code, out := action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "dedup"}, "group", false)
+	gid := resultID(t, code, out)
+	body := map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/image.png", "Name": "original"}
+	code, out = action(t, r, "CreateAsset", body, "first", false)
+	aid := resultID(t, code, out)
+	var canonical model.JDSeedanceResource
+	require.NoError(t, model.DB.First(&canonical, "id = ?", aid).Error)
+	provider.mu.Lock()
+	provider.reuseID = canonical.UpstreamID
+	provider.mu.Unlock()
+	// Different keys and names, including concurrent attempts, still return the
+	// original resource metadata. A caller does not gain a second deletion handle.
+	var wg sync.WaitGroup
+	for i := range 2 {
+		wg.Go(func() {
+			key := "duplicate-" + strconv.Itoa(i)
+			duplicate := map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/image.png", "Name": key}
+			code, out := action(t, r, "CreateAsset", duplicate, key, false)
+			assert.Equal(t, aid, resultID(t, code, out))
+			assert.Equal(t, "original", out["Result"].(map[string]any)["Name"])
+			code, out = action(t, r, "CreateAsset", duplicate, key, false)
+			assert.Equal(t, aid, resultID(t, code, out))
+		})
+	}
+	wg.Wait()
+	provider.mu.Lock()
+	assert.Equal(t, 3, provider.calls["CreateAsset"])
+	provider.mu.Unlock()
+	code, out = action(t, r, "ListAssets", map[string]any{"GroupId": gid}, "", false)
+	require.Equal(t, 200, code, out)
+	assert.Equal(t, float64(1), out["Result"].(map[string]any)["TotalCount"])
+	var alias model.JDSeedanceResource
+	require.NoError(t, model.DB.Where("request_key = ?", "duplicate-0").First(&alias).Error)
+	assert.Equal(t, aid, alias.CanonicalID)
+	assert.True(t, alias.Deleted)
+	assert.Nil(t, alias.UpstreamIdentity)
+	assert.Empty(t, alias.UpstreamID)
+	code, out = action(t, r, "GetAsset", map[string]any{"Id": alias.ID}, "", false)
+	assert.Equal(t, 404, code, out)
+	code, out = action(t, r, "DeleteAsset", map[string]any{"Id": alias.ID}, "", false)
+	assert.Equal(t, 404, code, out)
+	code, out = action(t, r, "CreateAsset", body, "duplicate-0", false)
+	require.Equal(t, 409, code, out)
+	assert.Equal(t, "idempotency_conflict", out["error"].(map[string]any)["code"])
+	code, out = action(t, r, "DeleteAsset", map[string]any{"Id": aid}, "", false)
+	require.Equal(t, 200, code, out)
+	duplicate := map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/image.png", "Name": "duplicate-0"}
+	code, out = action(t, r, "CreateAsset", duplicate, "duplicate-0", false)
+	require.Equal(t, 409, code, out)
+	assert.Equal(t, "creation_unconfirmed", out["error"].(map[string]any)["code"])
+	provider.mu.Lock()
+	assert.Equal(t, 1, provider.calls["DeleteAsset"])
+	assert.Equal(t, 3, provider.calls["CreateAsset"])
+	provider.mu.Unlock()
+}
+
+func TestMaterialProviderDeduplicationRejectsUnsafeReuse(t *testing.T) {
+	for _, scenario := range []string{"other-user", "other-group", "other-type", "deleted"} {
+		t.Run(scenario, func(t *testing.T) {
+			r, ch := setupFeature(t)
+			provider := newProvider(t, ch, "/api/v3/assets/")
+			code, out := action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "original"}, "original-group", false)
+			gid := resultID(t, code, out)
+			code, out = action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/original.png"}, "original", false)
+			aid := resultID(t, code, out)
+			var canonical model.JDSeedanceResource
+			require.NoError(t, model.DB.First(&canonical, "id = ?", aid).Error)
+			provider.mu.Lock()
+			provider.reuseID = canonical.UpstreamID
+			provider.mu.Unlock()
+			other := scenario == "other-user"
+			if other || scenario == "other-group" {
+				code, out = action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "other"}, "other-group", other)
+				gid = resultID(t, code, out)
+			}
+			kind := "Image"
+			if scenario == "other-type" {
+				kind = "Video"
+			}
+			if scenario == "deleted" {
+				code, out = action(t, r, "DeleteAsset", map[string]any{"Id": aid}, "", false)
+				require.Equal(t, 200, code, out)
+			}
+			body := map[string]any{"GroupId": gid, "AssetType": kind, "URL": "https://93.184.215.14/duplicate.png"}
+			for range 2 {
+				code, out = action(t, r, "CreateAsset", body, "duplicate", other)
+				require.Equal(t, 409, code, out)
+				assert.Equal(t, "upstream_resource_conflict", out["error"].(map[string]any)["code"])
+				raw, err := common.Marshal(out)
+				require.NoError(t, err)
+				assert.NotContains(t, string(raw), aid)
+				assert.NotContains(t, string(raw), canonical.UpstreamID)
+			}
+			provider.mu.Lock()
+			assert.Equal(t, 2, provider.calls["CreateAsset"])
+			deletes := provider.calls["DeleteAsset"]
+			provider.mu.Unlock()
+			if scenario == "deleted" {
+				assert.Equal(t, 1, deletes)
+			} else {
+				assert.Zero(t, deletes)
+			}
+			var reservation model.JDSeedanceResource
+			require.NoError(t, model.DB.Where("request_key = ?", "duplicate").First(&reservation).Error)
+			assert.True(t, reservation.Deleted)
+			assert.Empty(t, reservation.CanonicalID)
+			assert.Nil(t, reservation.UpstreamIdentity)
+		})
+	}
 }

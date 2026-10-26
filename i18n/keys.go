@@ -195,6 +195,7 @@ const (
 	MsgJDSeedanceUpstreamDidNotConfirmAResourceIdentifier                                = "jdtoken.seedance.upstream_did_not_confirm_a_resource_identifier"
 	MsgJDSeedanceUpstreamDidNotReturnAJsonObject                                         = "jdtoken.seedance.upstream_did_not_return_a_json_object"
 	MsgJDSeedanceUpstreamOutcomeIsUnconfirmedDoNotRetryACreationWithANewIdempotencyKey   = "jdtoken.seedance.upstream_outcome_is_unconfirmed_do_not_retry_a_creation_with_a_new_idempotency_key"
+	MsgJDSeedanceUpstreamResourceConflict                                                = "jdtoken.seedance.upstream_resource_conflict"
 	MsgJDSeedanceUpstreamRejectedTheOperation                                            = "jdtoken.seedance.upstream_rejected_the_operation"
 	MsgJDSeedanceUseUrlOrUploadidNotBoth                                                 = "jdtoken.seedance.use_url_or_uploadid_not_both"
 	MsgJDSeedanceUseAnOwnedJdotokenMaterialIdentifier                                    = "jdtoken.seedance.use_an_owned_jdotoken_material_identifier"
