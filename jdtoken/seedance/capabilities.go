@@ -24,7 +24,7 @@ func Capabilities(c *gin.Context) {
 				continue
 			}
 			caps := b.Models[name]
-			entries = append(entries, map[string]any{"service": b.Name, "model": name, "material_management": b.Provider != "sdgo", "storage_types": b.StoreTypes, "reference_types": caps.ReferenceTypes, "upload": map[string]any{"enabled": storageErr == nil, "max_bytes": maxUploadSize, "expires_seconds": 86400, "audio": false}, "task_list": true, "task_cancel": caps.Cancel, "task_delete": map[string]any{"local": true, "upstream": false}, "draft": caps.Draft, "draft_upgrade": caps.DraftUpgrade, "mov": caps.MOV, "frames": caps.Frames, "automatic_ingestion": false, "real_person_verification": false, "cross_account_copy": false, "verification": "administrator_configured"})
+			entries = append(entries, map[string]any{"service": b.Name, "model": name, "material_management": b.Provider != "sdgo", "storage_types": b.StoreTypes, "reference_types": caps.ReferenceTypes, "upload": map[string]any{"enabled": storageErr == nil, "max_bytes": maxUploadSize, "expires_seconds": 86400, "audio": false}, "task_list": true, "task_cancel": caps.Cancel, "task_delete": map[string]any{"local": true, "upstream": false}, "draft": caps.Draft, "draft_upgrade": caps.DraftUpgrade, "mov": caps.MOV, "frames": caps.Frames, "automatic_ingestion": false, "real_person_verification": b.RealPersonVerification, "cross_account_copy": false, "verification": "administrator_configured"})
 		}
 	}
 	c.JSON(200, gin.H{"object": "list", "data": entries, "asset_api_version": APIVersion})

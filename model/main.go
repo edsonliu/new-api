@@ -360,6 +360,7 @@ func migrateDB() error {
 		&JDSeedanceResource{},
 		&JDSeedanceUpload{},
 		&JDSeedanceTaskDeletion{},
+		&JDSeedanceVerification{},
 		&Model{},
 		&Vendor{},
 		&PrefillGroup{},

@@ -203,3 +203,14 @@ const (
 )
 
 const MsgJDSeedanceMaterialReferenceTypeMismatch = "jdtoken.seedance.material_reference_type_mismatch"
+
+const (
+	MsgJDSeedanceUpstreamRateLimited           = "jdtoken.seedance.upstream_rate_limited"
+	MsgJDSeedanceUpstreamCapabilityUnavailable = "jdtoken.seedance.upstream_capability_unavailable"
+	MsgJDSeedanceUpstreamInvalidRequest        = "jdtoken.seedance.upstream_invalid_request"
+	MsgJDSeedanceVerificationPending           = "jdtoken.seedance.verification_pending"
+	MsgJDSeedanceVerificationTokenInvalid      = "jdtoken.seedance.verification_token_invalid"
+	MsgJDSeedanceVerificationDisabled          = "jdtoken.seedance.verification_disabled"
+	MsgJDSeedanceVerificationExpired           = "jdtoken.seedance.verification_expired"
+	MsgJDSeedanceVerificationCallbackInvalid   = "jdtoken.seedance.verification_callback_invalid"
+)

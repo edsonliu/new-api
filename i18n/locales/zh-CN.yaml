@@ -178,3 +178,12 @@ jdtoken.seedance.version_must_be_2024_01_01: "Version 必须为 2024-01-01"
 jdtoken.seedance.material_reference_type_mismatch: "素材类型与引用字段不匹配"
 
 jdtoken.seedance.upstream_resource_conflict: "上游素材已绑定到其他素材记录，无法在当前范围内复用"
+
+jdtoken.seedance.upstream_rate_limited: "上游请求频率超限，请稍后重试"
+jdtoken.seedance.upstream_capability_unavailable: "上游账号未开通此功能"
+jdtoken.seedance.upstream_invalid_request: "上游拒绝了请求参数"
+jdtoken.seedance.verification_pending: "真人认证尚未完成"
+jdtoken.seedance.verification_token_invalid: "请提供为当前用户签发的有效认证凭证"
+jdtoken.seedance.verification_disabled: "此服务尚未启用真人认证"
+jdtoken.seedance.verification_expired: "认证会话已过期，请重新创建"
+jdtoken.seedance.verification_callback_invalid: "CallbackURL 必须为不含凭据或片段的公网 HTTPS 地址"

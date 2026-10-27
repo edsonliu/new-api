@@ -211,13 +211,14 @@ section('素材与上传', 'capabilities', '查询服务与模型能力', '先�
 """ + code('json', json.dumps({'object':'list','data':[{'service':'seedance-standard','model':MINI,'material_management':True,'storage_types':['Image','Video','Audio'],'reference_types':['Image','Video','Audio'],'upload':{'enabled':True,'max_bytes':104857600,'expires_seconds':86400,'audio':False},'task_list':True,'task_cancel':True,'task_delete':{'local':True,'upstream':False},'draft':False,'draft_upgrade':False,'mov':False,'frames':False,'automatic_ingestion':False,'real_person_verification':False,'cross_account_copy':False,'verification':'administrator_configured'}],'asset_api_version':'2024-01-01'}, ensure_ascii=False,indent=2)) + table(['服务标识', '当前配置模型', '素材管理 / 引用', '取消生成'], [
  ['<code>seedance-standard</code>', '2.0 mini / 2.0 / 2.0 fast / 2.5', '图片、视频、音频素材库；四个模型均可引用三类素材；签名上传仅图片/视频', '已启用；fast 实测取消成功'],
  ['<code>seedance-alternate</code>', '2.0', '图片、视频、音频素材库；2.0 音频 ID 生成已验证；签名上传仅图片/视频', '未启用'],
+ ['<code>seedance-shujubao</code>', '2.0、fast、mini、2.5', '图片、视频、音频素材库；真人认证由独立能力开关控制', '以 capabilities 为准'],
  ['<code>seedance-upload</code>', '2.0 mini', '临时上传流程；无独立素材库；当前上游模型不可用，见兼容说明', '未启用'],
-]) + """<p>截至 2026-10-26。三类服务均提供任务列表及终态本地隐藏；2.5 的 draft、draft_upgrade、mov 已配置开放，具体组合的实测范围见兼容说明。verification=administrator_configured 表示管理员配置声明，不表示每个参数组合均已通过实测。storage_types 表示可入库类型，reference_types 表示该模型可用于生成的类型；upload.audio 单独表示本地音频上传。standard 四个模型及 alternate 2.0 允许音频素材 ID 引用，不代表音频文件直传开放。调用方应刷新能力列表，不能将类型固定为 Image/Video。以实时能力响应、令牌分组和模型权限为准；需要开通服务时联系管理员。</p>""")
+]) + """<p>截至 2026-10-27。下列服务是否启用以实时能力响应为准；均复用任务列表及终态本地隐藏。2.5 的 draft、draft_upgrade、mov 已配置开放，具体组合的实测范围见兼容说明。verification=administrator_configured 表示管理员配置声明，不表示每个参数组合均已通过实测。storage_types 表示可入库类型，reference_types 表示该模型可用于生成的类型；upload.audio 单独表示本地音频上传。standard 四个模型及 alternate 2.0 允许音频素材 ID 引用，不代表音频文件直传开放。调用方应刷新能力列表，不能将类型固定为 Image/Video。以实时能力响应、令牌分组和模型权限为准；需要开通服务时联系管理员。</p>""")
 
 section('素材与上传', 'asset-mode', '素材库接入流程', '创建素材组 → 创建素材 → 等待 Active → 引用生成。', """
-<p>本站已提供独立素材库管理，支持图片、视频素材的创建、查询、更新、删除及分页；seedance-standard、seedance-alternate 另支持音频 URL 入库和同样的管理操作。素材按用户隔离：同一用户的多个 API Key 共享素材，其他用户不可访问。API Key 还须具备所选服务的模型与分组权限。</p>
+<p>本站已提供独立素材库管理，支持图片、视频素材的创建、查询、更新、删除及分页；seedance-standard、seedance-alternate，以及启用后的 seedance-shujubao 支持音频 URL 入库和同样的管理操作。素材按用户隔离：同一用户的多个 API Key 共享素材，其他用户不可访问。API Key 还须具备所选服务的模型与分组权限。</p>
 <ol><li>调用能力查询，选择 material_management=true 的服务。</li><li>创建 AIGC 素材组，保存本站 jdg_ 开头的组 ID。</li><li>通过公网 URL 或已完成上传的 UploadId 创建素材，保存 jda_ 开头的素材 ID。</li><li>轮询 GetAsset，确认 Status=Active 后，用 asset://jda_... 生成。</li></ol>
-""" + note('支持 AIGC 素材组，不提供真人认证、跨账号复制或自动入库承诺。历史 image_source_mode=asset / video_source_mode=asset 属于渠道扩展，不能替代本站素材创建流程；不要据此预期任务结果返回可复用的本站素材 ID。') + """<p>旧的裸上游 asset:// ID 不能直接当作本站素材使用，需要通过本站接口重新创建。本站固定素材所属账号，禁止跨账号混用或自动重试到其他账号；账号凭据改变后可能需要重新入库。</p>""")
+""" + note('支持 AIGC 素材组；数据宝服务的真人认证另见下方专节，以 real_person_verification 能力为准。不提供跨账号复制或自动入库承诺。历史 image_source_mode=asset / video_source_mode=asset 属于渠道扩展，不能替代本站素材创建流程；不要据此预期任务结果返回可复用的本站素材 ID。') + """<p>旧的裸上游 asset:// ID 不能直接当作本站素材使用，需要通过本站接口重新创建。本站固定素材所属账号，禁止跨账号混用或自动重试到其他账号；账号凭据改变后可能需要重新入库。</p>""")
 
 section('素材与上传', 'asset-api', '素材与素材组 API', '十个 Action 共用一个入口，字段名区分大小写。', """
 <div class="endpoint"><span class="method">POST</span><code>/doubao/api/v3/assets/?Action=...&amp;Version=2024-01-01</code></div>
@@ -237,6 +238,25 @@ section('素材与上传', 'asset-api', '素材与素材组 API', '十个 Action
 <p>创建响应可能为 Processing，不能马上生成。通过 GetAsset 刷新至 Active；若状态异常，读取响应并检查素材。URL 必须是公开可读的 HTTP(S) 地址，端口限 80/443；内网地址、本地路径、需登录页面不可用。不会透传跳过审核的参数。</p>
 <h3 id="asset-pagination">分页与响应</h3><p>成功响应统一包在 Result 内，并带 ResponseMetadata。列表支持 PageNumber（或 Page）、PageSize（默认 20，1–200）、NextToken（下一页数字字符串）。素材列表可加 GroupId / GroupIds（最多 100 个）、Status、AssetType、Service；组列表使用 Service 过滤。查询页码为 1–100000。</p>
 """ + code('json', json.dumps({'ResponseMetadata':{'RequestId':'REQUEST_ID','Action':'ListAssets','Version':'2024-01-01'},'Result':{'Items':[],'TotalCount':0,'PageNumber':1,'PageSize':20,'NextToken':'','StatusConsistency':'last_observed'}},indent=2)) + """<p>NextToken 为空表示末页。列表状态为缓存观察值，需要新状态时调用 GetAsset；生成前也会校验素材最新状态。列表不会导入或枚举历史共享上游账号中的其他素材。</p>""" + note('相同用户、同类资源、相同 Idempotency-Key 和相同请求可安全重试；同 Key 改参数返回 409。上游创建结果不确定时也会保留待确认状态并返回 409，请联系管理员核对，勿盲目换 Key 重复创建。视频生成接口不因此自动获得素材创建接口的幂等保证。'))
+
+section('素材与上传', 'shujubao', '数据宝服务接入', '使用同一套 JDOTOKEN 素材接口，显式选择数据宝服务。', """
+<p>先查询 <code>GET /v1/seedance/capabilities</code>，确认令牌可见 <code>seedance-shujubao</code>。接口示例只适用于已经启用此服务的环境；未返回该服务时不要直接使用示例。模型名使用本站完整名称，不改成 seedance-2.0 等渠道别名。</p>
+""" + code('bash', curl(ASSETS.format('CreateAssetGroup'), {'Service':'seedance-shujubao','Model':MINI,'Name':'数据宝项目素材'}, extra=' -H "Idempotency-Key: shujubao-project-001"')) + """
+<p>取得本站 <code>jdg_</code> ID 后，使用上方十个素材 / 素材组 Action。图片、视频、音频分别使用 Image、Video、Audio；音频通过公网 URL 入库。GetAsset 返回 Active 后，将本站 <code>asset://jda_...</code> 放入对应媒体字段，生成时可以显式指定 <code>seedance_service: seedance-shujubao</code>。</p>
+""" + code('bash', curl(VIDEO, {'seedance_service':'seedance-shujubao','model':MINI,'content':[{'type':'text','text':'让参考图中的玩具机器人轻轻挥手。'},{'type':'image_url','role':'reference_image','image_url':{'url':'asset://jda_REPLACE'}}],'duration':4,'resolution':'480p','generate_audio':False})) + """
+<p>视频生成、单任务查询、任务列表及结果下载继续使用本文统一入口。终态任务可在本站隐藏；取消、草稿等能力只在 capabilities 明确启用时使用。数据宝文档的 /v1/api/assets/ 是渠道内部入口，不是本站对外路径。</p>
+""" + note('素材绑定原服务和渠道账号，不能将 Lingxi / 移动云的素材 ID 转给数据宝，也不能传入裸上游 asset:// ID。素材创建仍需显式指定自己的素材组和 Idempotency-Key；不启用共享默认组，不透传跳过审核参数。数据宝返回素材状态同步中时，本站响应 409 upstream_resource_busy 和 Retry-After: 2；稍后以相同请求重试。'))
+
+section('素材与上传', 'real-person', '真人认证与素材组', '本人完成活体认证后，将认证结果绑定为当前用户自己的素材组。', """
+<p>仅在所选服务返回 <code>real_person_verification: true</code> 时可用。当前适配数据宝；其他服务不会随之自动开放。真人认证不是 JDOTOKEN 登录，也不会改变账户或令牌权限。</p>
+<h3 id="real-person-create">1. 创建认证会话</h3><p>CallbackURL 必须是你的公网 HTTPS 回跳地址，端口为 443，不可包含账号密码或 URL 片段。创建必须带 Idempotency-Key，建议指定 Model 以校验目标模型权限。</p>
+""" + code('bash', curl(ASSETS.format('CreateVisualValidateSession'), {'Service':'seedance-shujubao','Model':MINI,'CallbackURL':'https://your-domain.example/verification-complete'}, extra=' -H "Idempotency-Key: person-verification-001"')) + code('json', json.dumps({'Result':{'SessionId':'jdv_REPLACE','BytedToken':'PRIVATE_VERIFICATION_TOKEN','H5Link':'https://verification-provider.example/session','CallbackURL':'https://your-domain.example/verification-complete','Service':'seedance-shujubao','ExpiresAt':1793100000}},ensure_ascii=False,indent=2)) + """
+<p>让需要授权的本人打开 H5Link，按页面要求确认授权并完成活体认证。BytedToken 和 H5Link 是短期敏感凭证，不要写入公开日志或分享给其他人；会话有效期最多 30 分钟，以 ExpiresAt 为准。相同创建 Key 重试不会重复创建；结果不确定时保留原 Key 并联系管理员核查。</p>
+<h3 id="real-person-result">2. 查询认证结果</h3><p>浏览器回跳参数只用于提示；是否认证成功必须通过服务器查询确认。使用创建会话时返回、且属于当前用户的 BytedToken：</p>
+""" + code('bash', curl(ASSETS.format('GetVisualValidateResult'), {'BytedToken':'PRIVATE_VERIFICATION_TOKEN'})) + code('json', json.dumps({'Result':{'GroupId':'jdg_REPLACE','GroupType':'LivenessFace','Service':'seedance-shujubao'}},ensure_ascii=False,indent=2)) + """
+<p>成功时返回本站 jdg_ 素材组 ID，不暴露上游组 ID；可继续使用 CreateAsset 上传同一人物的素材，等待 Active 后用于生成。不能使用 CreateAssetGroup 直接伪造 LivenessFace 组。组删除后，旧认证结果不能重新创建该组。</p>
+<p>409 verification_pending 表示尚未完成；410 verification_expired 表示会话过期，需要新建。404 可能是凭证不属于当前用户，或上游暂未提供认证结果；不能当作认证成功。403 upstream_capability_unavailable 表示渠道账号未开通功能。本人完成认证、真人组入库和成片属于人工验收环节；创建认证链接成功不代表这一整条链路已经通过。</p>
+""" + note('不同用户之间不能交换认证凭证；查询仍检查原服务、模型权限及渠道账号。渠道换 Key 或停用后旧会话不能继续导入素材组。'))
 
 section('素材与上传', 'uploads', '上传本地文件', '先申请上传，再 PUT 文件，最后确认并获取引用。', """
 <p>使用本站签名上传，不需要自行配置对象存储。支持 PNG、JPEG、WebP 图片和 MP4、MOV 视频；暂不支持本地音频文件上传（upload.audio=false）；音频请通过公开 URL 调用 CreateAsset 入库，见<a href="#audio-reference">音频素材章节</a>。单文件最多 100 MiB（104857600 字节），每用户最多 20 个未过期预留，有效期为申请后的 24 小时。MOV 上传类型不代表所有模型支持 MOV 输出。</p>
@@ -413,7 +433,7 @@ section('用量与排错', 'errors', '错误处理与限制', '先确认错误�
  ['客户端提示“仅支持 Image/Video”', '若请求尚未到达本站，更新调用方类型校验和能力缓存；Audio 入库与引用分开判断。'],
 ]) + '<h3 id="material-retry">素材并发与重试</h3><p>409 resource_busy 表示资源仍在处理，不等于审核失败。服务器会短暂等待资源锁，超时仍可能返回该错误及 Retry-After: 2。按响应头等待至少 2 秒并增加随机退避后，重试相同请求；创建操作保持原 Idempotency-Key。409 idempotency_conflict 应核对同 Key 的参数是否改变；creation_unconfirmed 表示上游创建结果待核对，不能当作 resource_busy 自动重复提交或换 Key。</p>')
 
-section('用量与排错', 'compatibility', '兼容范围与已知限制', '截至 2026-10-26：区分已实测、配置声明和未开放能力。', table(['能力', '状态 / 验证范围', '接入建议'], [
+section('用量与排错', 'compatibility', '兼容范围与已知限制', '截至 2026-10-27：区分已实测、配置声明和未开放能力。', table(['能力', '状态 / 验证范围', '接入建议'], [
  ['素材与素材组十个 Action', '两个素材服务全部通过生产验证', '只管理本站当前用户素材，使用 jdg_ / jda_ ID。'],
  ['素材引用生成', 'standard：mini 图片+视频；alternate：2.0 图片，均已生成并下载', '4 秒、480p 的样本，不代表所有参数组合。'],
  ['签名上传 / 上传引用', 'PUT、确认、下载、HEAD、Range、权限及重复上传验证通过；upload 服务 mini 生成成功', '使用 upload:// 引用或另行入库；24 小时有效。'],
@@ -424,7 +444,9 @@ section('用量与排错', 'compatibility', '兼容范围与已知限制', '截�
  ['音频 URL 入库 / 素材 ID 引用', 'standard 四个模型均通过音频组合；alternate 2.0 图片＋音频通过。标准 2.0 另通过 15 秒/720p/4 图＋2 音频＋1 视频', '先入库并等待 Active；使用 audio_url / reference_audio；素材不可跨服务混用。'],
  ['seedance-upload 当前可用性', '2026-10-26：对应渠道四个 Seedance 模型均 503 model_not_found；素材接口 403 manju_gt_not_enabled', '需上游恢复账号权限；历史成功样本不代表当前可用。'],
  ['本地 multipart 文件直传 / 本地音频签名上传', '尚未开放', '图片/视频文件先走签名上传；音频使用 URL 入库，upload.audio=false。'],
- ['真人库认证 / 自动入库 / 跨账号复制 / frames', '当前未开放', '不承诺与任何渠道全部扩展接口等价。'],
+ ['数据宝四模型＋三类素材 ID', '2026-10-27 隔离候选环境：2.0 / fast / mini / 2.5 均成功生成，四个成品查询及下载通过，预扣与结算一致', 'fast 使用 OpenAI 兼容提交，其余使用原生提交；全部 4 秒 / 480p 档，Image＋Video＋Audio。正式开放以 capabilities 为准。'],
+ ['真人库认证', '仅在服务声明 real_person_verification=true 时开放', '创建会话、查询结果并取得本站真人组；本人活体认证须手动完成。'],
+ ['自动入库 / 跨账号复制 / frames', '当前未开放', '不承诺与任何渠道全部扩展接口等价。'],
  ['2.5 草稿 / 草稿转正片 / MOV 输出', '能力已配置；草稿有历史成功样本，转正片未完成本站成功验收', '先查能力；本轮未重复验收这些生成组合。'],
  ['mini 草稿 / 1080p', '模型限制', '使用普通视频和 480p / 720p。'],
  ['OpenAI 顶层 ratio / return_last_frame', '历史验证会被忽略', '放入 metadata；以实际产物校验参数。'],
@@ -435,6 +457,6 @@ section('用量与排错', 'compatibility', '兼容范围与已知限制', '截�
 ]) + '<p>素材权限隔离、幂等、上传重放拦截及取消结算均已验证。表中服务范围以能力查询为准；管理员配置声明不等于所有模型、素材与参数组合均已实测。</p>')
 
 section('用量与排错', 'changelog', '文档更新', '记录接口说明与验证范围的变化。', '''
-<h3 id="release-20261026-audio-matrix">2026-10-26 · 音频模型覆盖检查</h3><ul><li>补齐 standard fast、2.5 音频引用，以及 alternate 2.0 音频入库和引用。</li><li>新增三种通过本站实际成片验收的请求示例；保留素材账号隔离和本地音频直传限制。</li><li>说明 seedance-upload 上游账号素材权限阻断，未将受理或配置声明当作成功验收。</li></ul><h3 id="release-20261026-audio">2026-10-26 · 完整版 2.0 音频素材引用</h3><ul><li>standard 的完整版 2.0 新增 Audio 引用，mini 保持支持。</li><li>补充原生 15 秒、720p、9:16、多图片与双音频组合，以及 OpenAI 双音频示例。</li><li>更新模型能力、422 排查和已知限制；说明占位视频仍会作为参考发送。</li></ul><h3 id="release-20261024-audio">2026-10-24 · 音频素材入库与 mini 引用生成</h3><ul><li>更新 standard 的音频入库、mini 音频素材 ID 引用能力和实时能力响应示例。</li><li>新增 WAV URL 入库、图片＋音频及图片＋视频＋音频的原生/OpenAI 请求写法，标明实际验收入口。</li><li>补充 422 类型限制、Active 状态、跨服务引用与客户端类型缓存排查；保留本地音频直传未开放的限制。</li><li>补充 resource_busy 的 Retry-After 与同幂等 Key 重试说明。</li></ul><h3 id="release-20261023">2026-10-23 · 素材管理第一阶段上线</h3><ul><li>新增服务能力查询、素材与素材组十个 Action、幂等与用户归属说明。</li><li>新增本地签名上传、upload:// 与 asset:// 引用生成示例。</li><li>更新任务分页、筛选、取消与终态隐藏语义；移除这些接口尚未开放的旧结论。</li><li>按本轮生产回归更新各服务验证范围，区分配置声明和端到端实测。</li></ul><h3 id="release-20261012-verified">2026-10-12 · 实测更新</h3><ul><li>补充 mini OpenAI JSON、图片 / 视频 asset、Base64 首帧、尾帧和失败详情说明。</li><li>标注旧版创建、上传、列表、取消和对账的明确限制，新增协议响应差异。</li><li>修正下载命令，说明 metadata 参数写法、HEAD 和 MIME 兼容问题。</li><li>更新官方 Logo、公安备案信息与文档布局。</li></ul><h3 id="release-20261012">2026-10-12 · 首版</h3><ul><li>新增快速开始、鉴权、模型目录、对话与流式接入说明。</li><li>新增 Seedance 创建、图片参考、查询、下载与草稿示例。</li><li>根据真实任务记录标注 2.0 mini 与 2.5 的验证范围。</li><li>说明计费、重复提交风险及尚未开放的扩展能力。</li></ul>
-<p>最后核对日期：2026-10-26。模型与价格可能先于文档更新，以账户实时列表和控制台为准。</p>
+<h3 id="release-20261027-shujubao">2026-10-27 · 数据宝适配说明</h3><ul><li>新增数据宝三类素材、四模型生成、真人认证会话与结果查询的接入说明。</li><li>记录隔离候选环境真实生成与结算测试；生产开放以实时能力响应为准。</li><li>明确本人活体认证待人工验收，以及不跨渠道混用素材的限制。</li></ul><h3 id="release-20261026-audio-matrix">2026-10-26 · 音频模型覆盖检查</h3><ul><li>补齐 standard fast、2.5 音频引用，以及 alternate 2.0 音频入库和引用。</li><li>新增三种通过本站实际成片验收的请求示例；保留素材账号隔离和本地音频直传限制。</li><li>说明 seedance-upload 上游账号素材权限阻断，未将受理或配置声明当作成功验收。</li></ul><h3 id="release-20261026-audio">2026-10-26 · 完整版 2.0 音频素材引用</h3><ul><li>standard 的完整版 2.0 新增 Audio 引用，mini 保持支持。</li><li>补充原生 15 秒、720p、9:16、多图片与双音频组合，以及 OpenAI 双音频示例。</li><li>更新模型能力、422 排查和已知限制；说明占位视频仍会作为参考发送。</li></ul><h3 id="release-20261024-audio">2026-10-24 · 音频素材入库与 mini 引用生成</h3><ul><li>更新 standard 的音频入库、mini 音频素材 ID 引用能力和实时能力响应示例。</li><li>新增 WAV URL 入库、图片＋音频及图片＋视频＋音频的原生/OpenAI 请求写法，标明实际验收入口。</li><li>补充 422 类型限制、Active 状态、跨服务引用与客户端类型缓存排查；保留本地音频直传未开放的限制。</li><li>补充 resource_busy 的 Retry-After 与同幂等 Key 重试说明。</li></ul><h3 id="release-20261023">2026-10-23 · 素材管理第一阶段上线</h3><ul><li>新增服务能力查询、素材与素材组十个 Action、幂等与用户归属说明。</li><li>新增本地签名上传、upload:// 与 asset:// 引用生成示例。</li><li>更新任务分页、筛选、取消与终态隐藏语义；移除这些接口尚未开放的旧结论。</li><li>按本轮生产回归更新各服务验证范围，区分配置声明和端到端实测。</li></ul><h3 id="release-20261012-verified">2026-10-12 · 实测更新</h3><ul><li>补充 mini OpenAI JSON、图片 / 视频 asset、Base64 首帧、尾帧和失败详情说明。</li><li>标注旧版创建、上传、列表、取消和对账的明确限制，新增协议响应差异。</li><li>修正下载命令，说明 metadata 参数写法、HEAD 和 MIME 兼容问题。</li><li>更新官方 Logo、公安备案信息与文档布局。</li></ul><h3 id="release-20261012">2026-10-12 · 首版</h3><ul><li>新增快速开始、鉴权、模型目录、对话与流式接入说明。</li><li>新增 Seedance 创建、图片参考、查询、下载与草稿示例。</li><li>根据真实任务记录标注 2.0 mini 与 2.5 的验证范围。</li><li>说明计费、重复提交风险及尚未开放的扩展能力。</li></ul>
+<p>最后核对日期：2026-10-27。模型与价格可能先于文档更新，以账户实时列表和控制台为准。</p>
 ''')

@@ -177,3 +177,12 @@ jdtoken.seedance.version_must_be_2024_01_01: "Version must be 2024-01-01"
 jdtoken.seedance.material_reference_type_mismatch: "Material type does not match its reference field"
 
 jdtoken.seedance.upstream_resource_conflict: "Upstream resource is already bound to another material"
+
+jdtoken.seedance.upstream_rate_limited: "Upstream rate limit reached; retry later"
+jdtoken.seedance.upstream_capability_unavailable: "This capability is not enabled for the upstream account"
+jdtoken.seedance.upstream_invalid_request: "Upstream rejected the request parameters"
+jdtoken.seedance.verification_pending: "Real-person verification is not complete"
+jdtoken.seedance.verification_token_invalid: "Provide a valid verification token issued to this user"
+jdtoken.seedance.verification_disabled: "Real-person verification is not enabled for this service"
+jdtoken.seedance.verification_expired: "Verification session expired; create a new session"
+jdtoken.seedance.verification_callback_invalid: "CallbackURL must be a public HTTPS URL without credentials or a fragment"

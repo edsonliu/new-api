@@ -8,6 +8,15 @@ import (
 // English source text keeps provider-neutral errors readable at call sites;
 // locale IDs live in the host registry so all three backend languages are checked.
 var messageIDs = map[string]string{
+	"Upstream rate limit reached; retry later":                                 i18n.MsgJDSeedanceUpstreamRateLimited,
+	"This capability is not enabled for the upstream account":                  i18n.MsgJDSeedanceUpstreamCapabilityUnavailable,
+	"Upstream rejected the request parameters":                                 i18n.MsgJDSeedanceUpstreamInvalidRequest,
+	"Real-person verification is not complete":                                 i18n.MsgJDSeedanceVerificationPending,
+	"Provide a valid verification token issued to this user":                   i18n.MsgJDSeedanceVerificationTokenInvalid,
+	"Real-person verification is not enabled for this service":                 i18n.MsgJDSeedanceVerificationDisabled,
+	"Verification session expired; create a new session":                       i18n.MsgJDSeedanceVerificationExpired,
+	"CallbackURL must be a public HTTPS URL without credentials or a fragment": i18n.MsgJDSeedanceVerificationCallbackInvalid,
+
 	"Upstream resource is already bound to another material":                                  i18n.MsgJDSeedanceUpstreamResourceConflict,
 	"Material type does not match its reference field":                                        i18n.MsgJDSeedanceMaterialReferenceTypeMismatch,
 	"All references must belong to the selected service":                                      i18n.MsgJDSeedanceAllReferencesMustBelongToTheSelectedService,

@@ -5,16 +5,25 @@
       "name": "seedance-standard",
       "channel_id": 3,
       "provider": "lingxi",
-      "store_types": ["Image", "Video"],
+      "store_types": [
+        "Image",
+        "Video"
+      ],
       "models": {
         "doubao-seedance-2-0-mini-260615": {
           "upstream_model": "seedance-2.0-mini",
-          "reference_types": ["Image", "Video"],
+          "reference_types": [
+            "Image",
+            "Video"
+          ],
           "cancel": true
         },
         "doubao-seedance-2-5-260628": {
           "upstream_model": "seedance-2.5",
-          "reference_types": ["Image", "Video"],
+          "reference_types": [
+            "Image",
+            "Video"
+          ],
           "cancel": true,
           "draft": true,
           "draft_upgrade": true,
@@ -26,11 +35,17 @@
       "name": "seedance-alternate",
       "channel_id": 9,
       "provider": "mobilecloud",
-      "store_types": ["Image", "Video"],
+      "store_types": [
+        "Image",
+        "Video"
+      ],
       "models": {
         "doubao-seedance-2-0-260128": {
           "upstream_model": "doubao-seedance-2-0-260128",
-          "reference_types": ["Image", "Video"]
+          "reference_types": [
+            "Image",
+            "Video"
+          ]
         }
       }
     },
@@ -42,7 +57,55 @@
       "models": {
         "doubao-seedance-2-0-mini-260615": {
           "upstream_model": "doubao-seedance-2-0-mini-260615",
-          "reference_types": ["Image", "Video"]
+          "reference_types": [
+            "Image",
+            "Video"
+          ]
+        }
+      }
+    },
+    {
+      "name": "seedance-shujubao",
+      "channel_id": 10,
+      "provider": "shujubao",
+      "store_types": [
+        "Image",
+        "Video",
+        "Audio"
+      ],
+      "real_person_verification": false,
+      "models": {
+        "doubao-seedance-2-0-260128": {
+          "upstream_model": "doubao-seedance-2-0-260128",
+          "reference_types": [
+            "Image",
+            "Video",
+            "Audio"
+          ]
+        },
+        "doubao-seedance-2-0-fast-260128": {
+          "upstream_model": "doubao-seedance-2-0-fast-260128",
+          "reference_types": [
+            "Image",
+            "Video",
+            "Audio"
+          ]
+        },
+        "doubao-seedance-2-0-mini-260615": {
+          "upstream_model": "doubao-seedance-2-0-mini-260615",
+          "reference_types": [
+            "Image",
+            "Video",
+            "Audio"
+          ]
+        },
+        "doubao-seedance-2-5-260628": {
+          "upstream_model": "doubao-seedance-2-5-260628",
+          "reference_types": [
+            "Image",
+            "Video",
+            "Audio"
+          ]
         }
       }
     }

@@ -25,6 +25,9 @@ func writeError(c *gin.Context, err error) {
 			e = known
 		}
 	}
+	if e.Code == "upstream_resource_busy" || e.Code == "upstream_rate_limited" {
+		c.Header("Retry-After", "2")
+	}
 	c.AbortWithStatusJSON(e.Status, gin.H{"error": gin.H{"code": e.Code, "message": TranslateErrorMessage(c, e.Message)}})
 }
 func configForRequest(c *gin.Context) (Config, bool) {

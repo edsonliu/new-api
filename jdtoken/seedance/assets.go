@@ -37,6 +37,8 @@ type AssetRequest struct {
 	PageSize    int      `json:"PageSize"`
 	NextToken   string   `json:"NextToken"`
 	Status      string   `json:"Status"`
+	CallbackURL string   `json:"CallbackURL,omitempty"`
+	BytedToken  string   `json:"BytedToken,omitempty"`
 }
 
 var actions = map[string]string{"CreateAsset": "asset", "GetAsset": "asset", "UpdateAsset": "asset", "DeleteAsset": "asset", "ListAssets": "asset", "CreateAssetGroup": "group", "GetAssetGroup": "group", "UpdateAssetGroup": "group", "DeleteAssetGroup": "group", "ListAssetGroups": "group"}
@@ -48,7 +50,8 @@ func Assets(c *gin.Context) {
 	}
 	action := c.Query("Action")
 	kind, ok := actions[action]
-	if !ok {
+	verification := action == "CreateVisualValidateSession" || action == "GetVisualValidateResult"
+	if !ok && !verification {
 		writeError(c, apiError(400, "invalid_action", "Unsupported Action"))
 		return
 	}
@@ -68,6 +71,10 @@ func Assets(c *gin.Context) {
 	var value any
 	var err error
 	switch {
+	case verification:
+		c.Header("Cache-Control", "no-store")
+		c.Header("Referrer-Policy", "no-referrer")
+		value, err = visualValidation(c, cfg, action, req)
 	case strings.HasPrefix(action, "List"):
 		value, err = listAssets(c, kind, req)
 	case strings.HasPrefix(action, "Create"):
@@ -101,6 +108,9 @@ func resourceView(r *model.JDSeedanceResource) map[string]any {
 	if r.Kind == "group" {
 		v["Description"] = r.Description
 		v["GroupType"] = "AIGC"
+		if r.GroupType != "" {
+			v["GroupType"] = r.GroupType
+		}
 	} else {
 		v["GroupId"] = r.GroupID
 		v["AssetType"] = r.AssetType

@@ -3,6 +3,8 @@ package seedance
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"image"
 	"image/color"
 	"image/png"
@@ -67,7 +69,7 @@ func setupFeature(t *testing.T) (*gin.Engine, *model.Channel) {
 	require.NoError(t, err)
 	// Each test owns this disposable database; preserving schema across cases also
 	// exercises repeated migrations. Remove only this fixture's test records.
-	for _, table := range []string{"jdtoken_seedance_resources", "jdtoken_seedance_uploads", "jdtoken_seedance_task_deletions", "tasks", "abilities", "channels", "tokens", "users", "logs"} {
+	for _, table := range []string{"jdtoken_seedance_verifications", "jdtoken_seedance_resources", "jdtoken_seedance_uploads", "jdtoken_seedance_task_deletions", "tasks", "abilities", "channels", "tokens", "users", "logs"} {
 		require.NoError(t, db.Exec("DELETE FROM "+table).Error)
 	}
 	t.Cleanup(func() {
@@ -247,75 +249,83 @@ func newProvider(t *testing.T, ch *model.Channel, path string) *assetFixture {
 }
 
 func TestMaterialCRUDIsolationRoutingAndIdempotency(t *testing.T) {
-	r, ch := setupFeature(t)
-	provider := newProvider(t, ch, "/api/v3/assets/")
-	code, out := action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "group"}, "g1", false)
-	gid := resultID(t, code, out)
-	code, out = action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "group"}, "g1", false)
-	assert.Equal(t, gid, resultID(t, code, out))
-	assert.Equal(t, 1, provider.calls["CreateAssetGroup"])
-	for _, a := range []string{"GetAssetGroup", "UpdateAssetGroup", "DeleteAssetGroup"} {
-		code, _ = action(t, r, a, map[string]any{"Id": gid, "Name": "stolen"}, "", true)
-		assert.Equal(t, 404, code)
+	for _, tc := range []struct{ provider, path string }{{"lingxi", "/api/v3/assets/"}, {"mobilecloud", "/"}, {"shujubao", "/v1/api/assets/"}} {
+		t.Run(tc.provider, func(t *testing.T) {
+			r, ch := setupFeature(t)
+			cfg, err := LoadConfig()
+			require.NoError(t, err)
+			cfg.Bindings[0].Provider = tc.provider
+			setConfig(t, cfg)
+			provider := newProvider(t, ch, tc.path)
+			code, out := action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "group"}, "g1", false)
+			gid := resultID(t, code, out)
+			code, out = action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "group"}, "g1", false)
+			assert.Equal(t, gid, resultID(t, code, out))
+			assert.Equal(t, 1, provider.calls["CreateAssetGroup"])
+			for _, a := range []string{"GetAssetGroup", "UpdateAssetGroup", "DeleteAssetGroup"} {
+				code, _ = action(t, r, a, map[string]any{"Id": gid, "Name": "stolen"}, "", true)
+				assert.Equal(t, 404, code)
+			}
+			code, out = action(t, r, "UpdateAssetGroup", map[string]any{"Id": gid, "Name": "renamed", "Description": "description"}, "", false)
+			require.Equal(t, 200, code, out)
+			code, out = action(t, r, "GetAssetGroup", map[string]any{"Id": gid}, "", false)
+			require.Equal(t, 200, code, out)
+			assert.Equal(t, "renamed", out["Result"].(map[string]any)["Name"])
+			code, out = action(t, r, "ListAssetGroups", map[string]any{}, "", true)
+			require.Equal(t, 200, code, out)
+			assert.Equal(t, float64(0), out["Result"].(map[string]any)["TotalCount"])
+			code, out = action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/input.png", "Name": "image"}, "a1", false)
+			aid := resultID(t, code, out)
+			assert.Equal(t, "Processing", out["Result"].(map[string]any)["Status"])
+			code, out = action(t, r, "GetAsset", map[string]any{"Id": aid}, "", false)
+			require.Equal(t, 200, code, out)
+			view := out["Result"].(map[string]any)
+			assert.Equal(t, "Active", view["Status"])
+			assert.Equal(t, gid, view["GroupId"])
+			assert.Equal(t, "https://provider.invalid/private-link", view["URL"])
+			code, out = action(t, r, "UpdateAsset", map[string]any{"Id": aid, "Name": "new name"}, "", false)
+			require.Equal(t, 200, code, out)
+			for _, a := range []string{"GetAsset", "UpdateAsset", "DeleteAsset"} {
+				code, _ = action(t, r, a, map[string]any{"Id": aid}, "", true)
+				assert.Equal(t, 404, code)
+			}
+			code, out = action(t, r, "ListAssets", map[string]any{"GroupIds": []string{gid}, "PageSize": 1}, "", false)
+			require.Equal(t, 200, code, out)
+			assert.Equal(t, float64(1), out["Result"].(map[string]any)["TotalCount"])
+			body := map[string]any{"model": "seedance-test", "content": []any{map[string]any{"type": "image_url", "image_url": map[string]any{"url": "asset://" + aid}}}, "duration": 4, "generate_audio": false, "seed": 0}
+			code, out = request(t, r, "POST", "/doubao/api/v3/contents/generations/tasks", body, nil)
+			require.Equal(t, 200, code, out)
+			ref := out["content"].([]any)[0].(map[string]any)["image_url"].(map[string]any)["url"].(string)
+			assert.True(t, strings.HasPrefix(ref, "asset://provider-"))
+			assert.Equal(t, false, out["generate_audio"])
+			assert.Equal(t, float64(0), out["seed"])
+			code, _ = request(t, r, "POST", "/doubao/api/v3/contents/generations/tasks", body, map[string]string{"Test-User": "other"})
+			assert.Equal(t, 404, code)
+			code, _ = request(t, r, "POST", "/doubao/api/v3/contents/generations/tasks", body, map[string]string{"Test-Restricted": "true"})
+			assert.Equal(t, 403, code)
+			body["frames"] = 97
+			code, _ = request(t, r, "POST", "/doubao/api/v3/contents/generations/tasks", body, nil)
+			assert.Equal(t, 422, code)
+			delete(body, "frames")
+			require.NoError(t, model.DB.Model(ch).Update("key", "rotated-key").Error)
+			code, _ = request(t, r, "POST", "/doubao/api/v3/contents/generations/tasks", body, nil)
+			assert.Equal(t, 409, code)
+			require.NoError(t, model.DB.Model(ch).Update("key", "test-only-key").Error)
+			code, out = action(t, r, "DeleteAsset", map[string]any{"Id": aid}, "", false)
+			require.Equal(t, 200, code, out)
+			code, _ = action(t, r, "GetAsset", map[string]any{"Id": aid}, "", false)
+			assert.Equal(t, 404, code)
+			code, out = action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": "Video", "URL": "https://93.184.215.14/input.mp4"}, "a2", false)
+			aid2 := resultID(t, code, out)
+			code, out = action(t, r, "DeleteAssetGroup", map[string]any{"Id": gid}, "", false)
+			require.Equal(t, 200, code, out)
+			code, _ = action(t, r, "GetAsset", map[string]any{"Id": aid2}, "", false)
+			assert.Equal(t, 404, code)
+			code, out = action(t, r, "ListAssets", map[string]any{}, "", false)
+			require.Equal(t, 200, code, out)
+			assert.Equal(t, float64(0), out["Result"].(map[string]any)["TotalCount"])
+		})
 	}
-	code, out = action(t, r, "UpdateAssetGroup", map[string]any{"Id": gid, "Name": "renamed", "Description": "description"}, "", false)
-	require.Equal(t, 200, code, out)
-	code, out = action(t, r, "GetAssetGroup", map[string]any{"Id": gid}, "", false)
-	require.Equal(t, 200, code, out)
-	assert.Equal(t, "renamed", out["Result"].(map[string]any)["Name"])
-	code, out = action(t, r, "ListAssetGroups", map[string]any{}, "", true)
-	require.Equal(t, 200, code, out)
-	assert.Equal(t, float64(0), out["Result"].(map[string]any)["TotalCount"])
-	code, out = action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": "Image", "URL": "https://93.184.215.14/input.png", "Name": "image"}, "a1", false)
-	aid := resultID(t, code, out)
-	assert.Equal(t, "Processing", out["Result"].(map[string]any)["Status"])
-	code, out = action(t, r, "GetAsset", map[string]any{"Id": aid}, "", false)
-	require.Equal(t, 200, code, out)
-	view := out["Result"].(map[string]any)
-	assert.Equal(t, "Active", view["Status"])
-	assert.Equal(t, gid, view["GroupId"])
-	assert.Equal(t, "https://provider.invalid/private-link", view["URL"])
-	code, out = action(t, r, "UpdateAsset", map[string]any{"Id": aid, "Name": "new name"}, "", false)
-	require.Equal(t, 200, code, out)
-	for _, a := range []string{"GetAsset", "UpdateAsset", "DeleteAsset"} {
-		code, _ = action(t, r, a, map[string]any{"Id": aid}, "", true)
-		assert.Equal(t, 404, code)
-	}
-	code, out = action(t, r, "ListAssets", map[string]any{"GroupIds": []string{gid}, "PageSize": 1}, "", false)
-	require.Equal(t, 200, code, out)
-	assert.Equal(t, float64(1), out["Result"].(map[string]any)["TotalCount"])
-	body := map[string]any{"model": "seedance-test", "content": []any{map[string]any{"type": "image_url", "image_url": map[string]any{"url": "asset://" + aid}}}, "duration": 4, "generate_audio": false, "seed": 0}
-	code, out = request(t, r, "POST", "/doubao/api/v3/contents/generations/tasks", body, nil)
-	require.Equal(t, 200, code, out)
-	ref := out["content"].([]any)[0].(map[string]any)["image_url"].(map[string]any)["url"].(string)
-	assert.True(t, strings.HasPrefix(ref, "asset://provider-"))
-	assert.Equal(t, false, out["generate_audio"])
-	assert.Equal(t, float64(0), out["seed"])
-	code, _ = request(t, r, "POST", "/doubao/api/v3/contents/generations/tasks", body, map[string]string{"Test-User": "other"})
-	assert.Equal(t, 404, code)
-	code, _ = request(t, r, "POST", "/doubao/api/v3/contents/generations/tasks", body, map[string]string{"Test-Restricted": "true"})
-	assert.Equal(t, 403, code)
-	body["frames"] = 97
-	code, _ = request(t, r, "POST", "/doubao/api/v3/contents/generations/tasks", body, nil)
-	assert.Equal(t, 422, code)
-	delete(body, "frames")
-	require.NoError(t, model.DB.Model(ch).Update("key", "rotated-key").Error)
-	code, _ = request(t, r, "POST", "/doubao/api/v3/contents/generations/tasks", body, nil)
-	assert.Equal(t, 409, code)
-	require.NoError(t, model.DB.Model(ch).Update("key", "test-only-key").Error)
-	code, out = action(t, r, "DeleteAsset", map[string]any{"Id": aid}, "", false)
-	require.Equal(t, 200, code, out)
-	code, _ = action(t, r, "GetAsset", map[string]any{"Id": aid}, "", false)
-	assert.Equal(t, 404, code)
-	code, out = action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": "Video", "URL": "https://93.184.215.14/input.mp4"}, "a2", false)
-	aid2 := resultID(t, code, out)
-	code, out = action(t, r, "DeleteAssetGroup", map[string]any{"Id": gid}, "", false)
-	require.Equal(t, 200, code, out)
-	code, _ = action(t, r, "GetAsset", map[string]any{"Id": aid2}, "", false)
-	assert.Equal(t, 404, code)
-	code, out = action(t, r, "ListAssets", map[string]any{}, "", false)
-	require.Equal(t, 200, code, out)
-	assert.Equal(t, float64(0), out["Result"].(map[string]any)["TotalCount"])
 }
 
 func TestMobilecloudAdapterAndUnconfirmedCreation(t *testing.T) {
@@ -511,11 +521,11 @@ func TestAdditiveMigrationsAndUniqueOwnership(t *testing.T) {
 	db := model.DB
 	// Existing release tables and an existing wallet survive removing the new
 	// extension tables and adding them back, then running startup migrations twice.
-	for _, entity := range []any{&model.JDSeedanceResource{}, &model.JDSeedanceUpload{}, &model.JDSeedanceTaskDeletion{}} {
+	for _, entity := range []any{&model.JDSeedanceResource{}, &model.JDSeedanceUpload{}, &model.JDSeedanceTaskDeletion{}, &model.JDSeedanceVerification{}} {
 		require.NoError(t, db.Migrator().DropTable(entity))
 	}
 	for range 2 {
-		require.NoError(t, db.AutoMigrate(&model.JDSeedanceResource{}, &model.JDSeedanceUpload{}, &model.JDSeedanceTaskDeletion{}))
+		require.NoError(t, db.AutoMigrate(&model.JDSeedanceResource{}, &model.JDSeedanceUpload{}, &model.JDSeedanceTaskDeletion{}, &model.JDSeedanceVerification{}))
 	}
 	var owner model.User
 	require.NoError(t, db.First(&owner, 11).Error)
@@ -528,7 +538,7 @@ func TestAdditiveMigrationsAndUniqueOwnership(t *testing.T) {
 	duplicate.UserID = 22
 	require.NoError(t, db.Create(&duplicate).Error)
 	for range 2 {
-		require.NoError(t, db.AutoMigrate(&model.JDSeedanceResource{}, &model.JDSeedanceUpload{}, &model.JDSeedanceTaskDeletion{}))
+		require.NoError(t, db.AutoMigrate(&model.JDSeedanceResource{}, &model.JDSeedanceUpload{}, &model.JDSeedanceTaskDeletion{}, &model.JDSeedanceVerification{}))
 	}
 	var count int64
 	require.NoError(t, db.Model(&model.JDSeedanceResource{}).Count(&count).Error)
@@ -716,6 +726,16 @@ func TestReleasedDatabaseUpgrade(t *testing.T) {
 			assert.Equal(t, "released-provider-image", asset.UpstreamID)
 			assert.Equal(t, strings.Repeat("a", 64), *asset.UpstreamIdentity)
 			assert.Equal(t, "https://example.invalid/image.png", asset.SourceURL)
+			if os.Getenv("JD_SHUJUBAO_UPGRADE_FIXTURE") == "1" {
+				current, err := common.Marshal(AssetRequest{GroupId: "released-group", AssetType: "Image", URL: "https://example.invalid/image.png"})
+				require.NoError(t, err)
+				hash := sha256.Sum256(current)
+				c, _ := gin.CreateTestContext(httptest.NewRecorder())
+				common.SetContextKey(c, constant.ContextKeyUserId, 9101)
+				replay, err := replayCreation(c, "asset", "released-key", hex.EncodeToString(hash[:]))
+				require.NoError(t, err, "released idempotency hashes must remain valid")
+				assert.Equal(t, "released-image", replay.(map[string]any)["Id"])
+			}
 			alias := model.JDSeedanceResource{ID: "upgrade-replay", UserID: 9101, Kind: "asset", RequestKey: "upgrade-key", RequestHash: "upgrade-hash", Binding: "primary", AccountHash: asset.AccountHash, CanonicalID: asset.ID, Deleted: true, Status: "Reused"}
 			require.NoError(t, model.DB.Where("id = ?", alias.ID).FirstOrCreate(&alias).Error)
 			collision := asset
@@ -729,6 +749,8 @@ func TestReleasedDatabaseUpgrade(t *testing.T) {
 		}
 		assert.True(t, model.DB.Migrator().HasTable(&model.JDSeedanceUpload{}))
 		assert.True(t, model.DB.Migrator().HasTable(&model.JDSeedanceTaskDeletion{}))
+		assert.True(t, model.DB.Migrator().HasTable(&model.JDSeedanceVerification{}))
+		assert.True(t, model.DB.Migrator().HasColumn(&model.JDSeedanceResource{}, "group_type"))
 		sqlDB, err := model.DB.DB()
 		require.NoError(t, err)
 		require.NoError(t, sqlDB.Close())

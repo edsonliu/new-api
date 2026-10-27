@@ -33,11 +33,12 @@ type ModelCapabilities struct {
 	Frames         bool     `json:"frames"`
 }
 type Binding struct {
-	Name       string                       `json:"name"`
-	ChannelID  int                          `json:"channel_id"`
-	Provider   string                       `json:"provider"`
-	Models     map[string]ModelCapabilities `json:"models"`
-	StoreTypes []string                     `json:"store_types"`
+	Name                   string                       `json:"name"`
+	ChannelID              int                          `json:"channel_id"`
+	Provider               string                       `json:"provider"`
+	Models                 map[string]ModelCapabilities `json:"models"`
+	StoreTypes             []string                     `json:"store_types"`
+	RealPersonVerification bool                         `json:"real_person_verification,omitempty"`
 }
 type Config struct {
 	Enabled  bool      `json:"enabled"`
@@ -63,8 +64,11 @@ func LoadConfig() (Config, error) {
 	seen := map[string]bool{}
 	channels := map[int]bool{}
 	for _, b := range cfg.Bindings {
-		if !bindingName.MatchString(b.Name) || seen[b.Name] || channels[b.ChannelID] || b.ChannelID <= 0 || (b.Provider != "lingxi" && b.Provider != "mobilecloud" && b.Provider != "sdgo") {
+		if !bindingName.MatchString(b.Name) || seen[b.Name] || channels[b.ChannelID] || b.ChannelID <= 0 || !slices.Contains([]string{"lingxi", "mobilecloud", "sdgo", "shujubao"}, b.Provider) {
 			return Config{}, errors.New("invalid seedance binding")
+		}
+		if b.RealPersonVerification && b.Provider != "shujubao" {
+			return Config{}, errors.New("real-person verification requires a verified provider")
 		}
 		seen[b.Name] = true
 		channels[b.ChannelID] = true

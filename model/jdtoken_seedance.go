@@ -17,6 +17,7 @@ type JDSeedanceResource struct {
 	RequestKey       string  `gorm:"size:128;not null;uniqueIndex:uk_jds_request,priority:3"`
 	RequestHash      string  `gorm:"size:64;not null;default:''"`
 	GroupID          string  `gorm:"size:64;index"`
+	GroupType        string  `gorm:"size:32"`
 	Binding          string  `gorm:"size:64;not null"`
 	ChannelID        int     `gorm:"not null"`
 	AccountHash      string  `gorm:"size:64;not null"`
@@ -37,6 +38,26 @@ type JDSeedanceResource struct {
 }
 
 func (JDSeedanceResource) TableName() string { return "jdtoken_seedance_resources" }
+
+// Verification sessions are private, short-lived provider credentials. Never
+// expose this table through inventory lists or dashboard serializers.
+type JDSeedanceVerification struct {
+	ID          string `gorm:"primaryKey;size:64"`
+	UserID      int    `gorm:"not null;uniqueIndex:uk_jdsv_request,priority:1"`
+	RequestKey  string `gorm:"size:128;not null;uniqueIndex:uk_jdsv_request,priority:2"`
+	RequestHash string `gorm:"size:64;not null"`
+	Binding     string `gorm:"size:64;not null"`
+	ChannelID   int
+	AccountHash string  `gorm:"size:64;not null"`
+	Model       string  `gorm:"size:256"`
+	TokenHash   *string `gorm:"size:64;uniqueIndex:uk_jdsv_token"`
+	Response    string  `gorm:"type:text"`
+	GroupID     string  `gorm:"size:64"`
+	ExpiresAt   int64   `gorm:"index"`
+	CreatedAt   int64
+}
+
+func (JDSeedanceVerification) TableName() string { return "jdtoken_seedance_verifications" }
 
 // Uploads contain opaque object keys, never paths supplied by a client.
 type JDSeedanceUpload struct {

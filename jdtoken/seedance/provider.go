@@ -26,6 +26,10 @@ func apiError(status int, code, message string) error { return &APIError{status,
 // Provider adapters only accept paths constructed by this package. Never proxy
 // arbitrary user paths, headers, credentials, or shared-account list endpoints.
 func Call(ctx context.Context, ch *model.Channel, method, path string, payload any) (map[string]any, error) {
+	return callProvider(ctx, ch, method, path, payload, false)
+}
+
+func callProvider(ctx context.Context, ch *model.Channel, method, path string, payload any, shujubao bool) (map[string]any, error) {
 	var body []byte
 	var err error
 	if payload != nil {
@@ -73,6 +77,32 @@ func Call(ctx context.Context, ch *model.Channel, method, path string, payload a
 			code = "upstream_error"
 		}
 	}
+	// The data provider also uses {code:1,message:...}. Keep its handling
+	// separate so established providers retain their current error semantics.
+	if shujubao {
+		if v, exists := data["code"]; exists && v != float64(0) && v != "0" && v != "success" {
+			code = "platform_error"
+		}
+		if resp.StatusCode == http.StatusTooManyRequests {
+			return nil, apiError(429, "upstream_rate_limited", "Upstream rate limit reached; retry later")
+		}
+		if resp.StatusCode == http.StatusForbidden {
+			return nil, apiError(403, "upstream_capability_unavailable", "This capability is not enabled for the upstream account")
+		}
+		if code == "ValidatePending" {
+			return nil, apiError(409, "verification_pending", "Real-person verification is not complete")
+		}
+		if code == "BadRequest" {
+			meta, _ := data["ResponseMetadata"].(map[string]any)
+			detail, _ := meta["Error"].(map[string]any)
+			if detail["Message"] == "素材状态正在同步中，请稍后再尝试修改" {
+				return nil, apiError(409, "upstream_resource_busy", "Resource is busy; retry later")
+			}
+		}
+		if resp.StatusCode == http.StatusBadRequest && code != "" {
+			return nil, apiError(400, "upstream_invalid_request", "Upstream rejected the request parameters")
+		}
+	}
 	if resp.StatusCode == 404 || (resp.StatusCode == 400 && (code == "InvalidParameter.AssetID" || code == "InvalidParameter.AssetGroupID")) {
 		return nil, apiError(404, "not_found", "Resource not found")
 	}
@@ -86,10 +116,13 @@ func AssetAction(ctx context.Context, b Binding, ch *model.Channel, action strin
 	if b.Provider == "mobilecloud" {
 		path = "/"
 	}
+	if b.Provider == "shujubao" {
+		path = "/v1/api/assets/"
+	}
 	if b.Provider == "sdgo" {
 		return nil, apiError(422, "unsupported_capability", "Independent material management is unavailable for this service")
 	}
-	data, err := Call(ctx, ch, http.MethodPost, path+"?Action="+url.QueryEscape(action)+"&Version="+APIVersion, payload)
+	data, err := callProvider(ctx, ch, http.MethodPost, path+"?Action="+url.QueryEscape(action)+"&Version="+APIVersion, payload, b.Provider == "shujubao")
 	if err != nil {
 		return nil, err
 	}

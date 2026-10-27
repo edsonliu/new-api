@@ -8,7 +8,7 @@
 
 示例渠道编号对应 2026-10-22 的项目记录，仅为配置样例，发布前必须重新检查渠道身份、模型映射和分组。示例默认 `enabled:false`；确认后设为 `true`。`name` 是客户可见的服务名称，`provider`、`channel_id` 不返回给客户。每个渠道只能有一个服务绑定。`models` 使用本站请求模型名，`upstream_model` 必须匹配当前渠道映射；未填时视为同名。渠道停用、无模型权限、映射改变、凭据轮换、多 Key 渠道或覆盖鉴权请求头会使对应素材能力不可用。
 
-样例未开放音频、自动入库、真人认证、frames、跨账号复制；这些功能需要独立验收。音频 URL 入库和音频生成引用分别由 `store_types`、`reference_types` 控制，不能混为一个开关。取消能力应只对已验证的渠道开放；移动云和 SDGO 样例保持关闭。
+样例中的数据宝服务声明图片、视频和音频；其他样例维持原有默认值。自动入库、frames、跨账号复制未开放。真人认证由独立的 real_person_verification 开关控制，默认关闭，当前仅数据宝适配器允许启用。音频 URL 入库和音频生成引用分别由 `store_types`、`reference_types` 控制，不能混为一个开关。取消能力应只对已验证的渠道开放；移动云和 SDGO 样例保持关闭。
 
 上传还需要三个启动参数：
 
@@ -129,6 +129,35 @@ POST /doubao/api/v3/contents/generations/tasks
 
 ## 验证与安全范围
 
-测试包括十个 Action、用户隔离、ID/账号绑定、模型映射变更、SSRF 输入、HTML 200、创建幂等、签名上传/下载/HEAD、重复 PUT、过期清理、分页跨批次、取消与轮询竞争、误报取消不退款、历史数据与索引保留。使用真实 SQLite/MySQL/PostgreSQL；提供方 HTTP 端为按已实测文档编写的契约测试服务。本次开发验证没有向生产发布，也没有新增真实计费视频。
+测试包括十个 Action、用户隔离、ID/账号绑定、模型映射变更、SSRF 输入、HTML 200、创建幂等、签名上传/下载/HEAD、重复 PUT、过期清理、分页跨批次、取消与轮询竞争、误报取消不退款、历史数据与索引保留。使用真实 SQLite/MySQL/PostgreSQL；提供方 HTTP 端为按已实测文档编写的契约测试服务。此段为初版验收范围；后续数据宝真实计费测试见下方适配记录及工作区报告。
 
 认证复用现有 TokenAuth，没有新建登录或 Session 流程。设计参考 OWASP ASVS 5.0.0 的访问控制、文件处理及凭据保护要求，以及 [Authentication](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)、[Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)、[Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html) 指南；这是本功能范围内验证，不是全站 ASVS 合规认证。
+
+
+## 数据宝适配（2026-10-27）
+
+新增 `provider: shujubao`，调用数据宝的 `/v1/api/assets/` Action 入口，使用渠道原有 Bearer Key。视频生成和单任务查询继续复用 Doubao 任务插件，不修改插件或计费。独立服务名建议 `seedance-shujubao`；渠道 10 为本次核实编号，启用前再次核对身份。四个模型使用完整的同名映射，不能复用 Lingxi 的 `seedance-*` 别名。
+
+十个素材 / 素材组 Action 沿用本站路径、用户隔离、幂等和 `jda_` / `jdg_` 引用。数据宝的共享默认组、裸上游素材 ID、跳过审核参数及旧版专有上传路径不作为本站兼容入口；客户端按本站文档接入。库存列表仍只读本站归属，绝不代理数据宝账号的共享列表。首次基础接口实测包含 Image/Video/Audio URL 创建、Active 状态、更新、读取和列表；四个模型均已在隔离候选网关通过图片＋视频＋音频 ID 的 4 秒 / 480p 档真实生成，查询、下载及用量结算核对通过；fast 使用 OpenAI 兼容提交，其余使用原生提交。此结果不代表已经发布至正式服务，详情见工作区 reports/shujubao-integration-20261027/。
+
+数据宝错误信封单独解析，不改变 Lingxi / 移动云 / SDGO 错误语义。429 返回 `upstream_rate_limited`；403 返回 `upstream_capability_unavailable`；参数错误返回 `upstream_invalid_request`。已实测的“素材状态正在同步中，请稍后再尝试修改”映射为 409 `upstream_resource_busy`，限流和同步中的可重试响应带 `Retry-After: 2`。不把任意上游原文、账号信息或凭证暴露给调用方。
+
+### 真人认证
+
+绑定可增加 `real_person_verification: true`；其他 provider 不随之开放。素材 Action 入口新增 `CreateVisualValidateSession` 和 `GetVisualValidateResult`：
+
+- 创建要求 Service、CallbackURL（公网 HTTPS、443，无 userinfo/fragment）、Idempotency-Key；Model 可选。复用 TokenAuth、模型分组权限和速率限制。
+- 返回白名单字段 SessionId、BytedToken、H5Link、CallbackURL、Service、ExpiresAt，设置 no-store / no-referrer。只接受 HTTPS H5Link。创建先预留幂等记录，上游结果不确定时保留记录，不自动重发。
+- 凭证按用户绑定，TokenHash 唯一。Get 只能查询该用户创建且未过期的会话，并再次检查模型权限、服务启用、渠道和 Key 指纹。浏览器回调参数不作为认证成功依据，服务端只采信上游 GetVisualValidateResult 的 GroupId。
+- 上游返回 GroupId 后，原子登记为该用户的本站 LivenessFace 组，复用原有上游身份唯一约束。多次查询、同一人物的重复认证均不能将其他用户的组转移给当前用户；已删除组不复活。
+- 会话最多 30 分钟。短期响应含敏感 H5 凭证，保存在私有数据库，不进入库存 / 日志 / 公共报表；新建会话时清空过期会话的响应，保留幂等和归属元数据。数据库备份同样按凭证保护。真人 H5 操作必须由授权本人完成；自动验收不宣称覆盖活体完成后的真实人像生成。
+
+### 迁移、升级与回滚
+
+只增加独立 `jdtoken_seedance_verifications` 表和资源表可空 `group_type` 列；旧 AIGC 组的空值继续按 AIGC 展示。上游核心接入点仅在已有 AutoMigrate 列表追加一个实体，另有现有三语言错误注册；生成、认证中间件、用户/任务表和计费插件保持不变。新增请求字段使用 omitempty，保留旧版素材创建的请求哈希，旧 Idempotency-Key 可继续重放。
+
+升级回归包含三种 provider 的相同 CRUD 合约、SDGO 能力边界、音频引用、真人会话所有权/到期/重复/上游不确定/凭据轮换、三数据库迁移与旧幂等哈希。所有权成功分支使用提供方合约测试；本人完成活体的真实验收需单独记录。
+
+部署前备份数据库和 JDOTOKENSeedance 配置。回退旧镜像前必须先移除新增 shujubao 绑定并处理其在途请求，保留原有三个绑定原样；旧版本不能解析新 provider，若保留新配置会影响整个能力配置加载。新增表与列保留，不恢复旧数据库覆盖交易。回退后新数据宝资产/真人会话暂停服务，不能改绑到其他渠道。应用发布遵循 Git tag 流程，只有完成发布和独立绑定启用后才可对外宣称生效。
+
+设计参考 [OWASP ASVS 5.0.0](https://github.com/OWASP/ASVS/releases/tag/v5.0.0)：v5.0.0-8.2.1（功能授权）、8.2.2（对象归属）、14.2.7（过期凭据清理）、14.3.2（no-store）与 Authentication、Session Management Cheat Sheets；这里的真人会话用于素材归属，未变更站点登录。重点控制包括所有者查询、模型/账号二次校验、令牌摘要索引、唯一组归属、回调 URL 限制、30 分钟到期及 no-store；测试结果不构成全站 ASVS 合规声明。
