@@ -49,6 +49,6 @@ html = f'''<!doctype html>
 <dialog id="search-dialog" aria-labelledby="search-title"><div class="search-heading"><h2 id="search-title">搜索文档</h2><button id="search-close" type="button" aria-label="关闭搜索">关闭 Esc</button></div><label for="search-input" class="sr-only">搜索关键词</label><input id="search-input" type="search" placeholder="模型、视频、鉴权、Python…" autocomplete="off"><p id="search-count" aria-live="polite"></p><ul id="search-results"></ul></dialog>
 <div id="toast" role="status" aria-live="polite"></div></body></html>'''
 (OUT / 'index.html').write_text(html)
-(OUT / 'release.json').write_text(json.dumps({'version':'2026.10.27.1','sections':len(SECTIONS),'assets':assets}, ensure_ascii=False, indent=2))
+(OUT / 'release.json').write_text(json.dumps({'version':'2026.10.27.2','sections':len(SECTIONS),'assets':assets}, ensure_ascii=False, indent=2))
 (ROOT / 'examples.json').write_text(json.dumps(EXAMPLES, ensure_ascii=False, indent=2))
 print(f'Built {len(SECTIONS)} sections and {len(EXAMPLES)} examples in {OUT}')
