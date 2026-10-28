@@ -79,6 +79,11 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Model Square'), href: '/pricing', requiresAuth })
   }
 
+  // JDOTOKEN application directory; keep the upstream build unchanged.
+  if (import.meta.env.VITE_HOME_VARIANT !== 'upstream') {
+    links.push({ title: t('Apps'), href: '/agent-market' })
+  }
+
   // Rankings
   const rankings = modules?.rankings
   if (rankings && typeof rankings === 'object' && rankings.enabled) {
