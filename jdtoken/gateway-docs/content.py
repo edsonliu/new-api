@@ -230,12 +230,12 @@ section('素材与上传', 'asset-api', '素材与素材组 API', '十个 Action
  ['DeleteAssetGroup', '<code>{"Id":"jdg_REPLACE"}</code>', '删除组，同时使组内素材不可用'],
  ['ListAssetGroups', '<code>{"Service":"seedance-standard","PageNumber":1,"PageSize":20}</code>', '仅列出本站当前用户的素材组'],
  ['CreateAsset', '<code>{"GroupId":"jdg_REPLACE","AssetType":"Image","Name":"参考图","URL":"https://your-domain.example/image.png"}</code>', 'GroupId、AssetType 必填；URL 与 UploadId 二选一；Name 可选；类型为 Image / Video / Audio，以服务 storage_types 为准；Audio 当前仅支持 URL 入库'],
- ['GetAsset', '<code>{"Id":"jda_REPLACE"}</code>', '刷新状态；响应可能含临时预览 URL'],
+ ['GetAsset', '<code>{"Id":"jda_REPLACE"}</code>', '刷新状态；失败时可含 Error.Code / Error.Message；响应可能含临时预览 URL'],
  ['UpdateAsset', '<code>{"Id":"jda_REPLACE","Name":"新名称"}</code>', '修改名称'],
  ['DeleteAsset', '<code>{"Id":"jda_REPLACE"}</code>', '删除素材，之后不可再引用'],
  ['ListAssets', '<code>{"GroupId":"jdg_REPLACE","Status":"Active","PageNumber":1,"PageSize":20}</code>', '本站归属列表；状态是最后观察值'],
 ]) + '<h3 id="create-asset-group">1. 创建素材组</h3>' + code('bash', curl(ASSETS.format('CreateAssetGroup'), {'Service':'seedance-standard','Model':MINI,'Name':'项目素材','GroupType':'AIGC'}, extra=' -H "Idempotency-Key: project-001"')) + code('json', json.dumps({'ResponseMetadata':{'RequestId':'REQUEST_ID','Action':'CreateAssetGroup','Version':'2024-01-01'},'Result':{'Id':'jdg_REPLACE','Name':'项目素材','Description':'','Service':'seedance-standard','GroupType':'AIGC','CreateTime':'2026-10-23T00:00:00Z','UpdateTime':'2026-10-23T00:00:00Z'}},ensure_ascii=False,indent=2)) + '<h3 id="create-asset">2. 创建素材并查询状态</h3>' + code('bash', curl(ASSETS.format('CreateAsset'), {'GroupId':'jdg_REPLACE','AssetType':'Image','Name':'参考图','URL':'https://your-domain.example/image.png'}, extra=' -H "Idempotency-Key: image-001"')) + code('bash', curl(ASSETS.format('GetAsset'), {'Id':'jda_REPLACE'})) + code('json', json.dumps({'ResponseMetadata':{'RequestId':'REQUEST_ID','Action':'GetAsset','Version':'2024-01-01'},'Result':{'Id':'jda_REPLACE','GroupId':'jdg_REPLACE','Name':'参考图','Service':'seedance-standard','AssetType':'Image','Status':'Active','Reference':'asset://jda_REPLACE','CreateTime':'2026-10-23T00:00:00Z','UpdateTime':'2026-10-23T00:00:05Z'}},ensure_ascii=False,indent=2)) + """
-<p>创建响应可能为 Processing，不能马上生成。通过 GetAsset 刷新至 Active；若状态异常，读取响应并检查素材。URL 必须是公开可读的 HTTP(S) 地址，端口限 80/443；内网地址、本地路径、需登录页面不可用。不会透传跳过审核的参数。</p>
+<p>创建响应可能为 Processing，不能马上生成。通过 GetAsset 刷新至 Active；若 Result.Status=Failed，读取 Result.Error.Code / Result.Error.Message 定位失败原因，详见<a href="#asset-failure">素材查询失败详情</a>。URL 必须是公开可读的 HTTP(S) 地址，端口限 80/443；内网地址、本地路径、需登录页面不可用。不会透传跳过审核的参数。</p>
 <h3 id="asset-pagination">分页与响应</h3><p>成功响应统一包在 Result 内，并带 ResponseMetadata。列表支持 PageNumber（或 Page）、PageSize（默认 20，1–200）、NextToken（下一页数字字符串）。素材列表可加 GroupId / GroupIds（最多 100 个）、Status、AssetType、Service；组列表使用 Service 过滤。查询页码为 1–100000。</p>
 """ + code('json', json.dumps({'ResponseMetadata':{'RequestId':'REQUEST_ID','Action':'ListAssets','Version':'2024-01-01'},'Result':{'Items':[],'TotalCount':0,'PageNumber':1,'PageSize':20,'NextToken':'','StatusConsistency':'last_observed'}},indent=2)) + """<p>NextToken 为空表示末页。列表状态为缓存观察值，需要新状态时调用 GetAsset；生成前也会校验素材最新状态。列表不会导入或枚举历史共享上游账号中的其他素材。</p>""" + note('相同用户、同类资源、相同 Idempotency-Key 和相同请求可安全重试；同 Key 改参数返回 409。上游创建结果不确定时也会保留待确认状态并返回 409，请联系管理员核对，勿盲目换 Key 重复创建。视频生成接口不因此自动获得素材创建接口的幂等保证。'))
 
@@ -398,6 +398,12 @@ section('视频 API', 'task-management', '任务列表、取消与隐藏', '列�
 """ + code('json', json.dumps({'id':'task_YOUR_TASK_ID','deleted':True,'upstream_deleted':False,'billing_records_retained':True},indent=2)) + note('这是本站隐藏记录与结果，不是上游物理文件删除。消费日志、账单和审计保留，隐藏操作不会退还已结算费用。GET /v1/videos/{id}/provenance 尚未开放；请用原生 usage 和控制台消费日志对账。'))
 
 section('用量与排错', 'failure-details', '素材失败与错误详情', '使用原生 v3 查询定位具体阶段。', '''
+<h3 id="asset-failure">素材入库失败：GetAsset</h3>
+<p>素材查询 HTTP 200 仅表示查询成功。图片、视频、音频均需检查 Result.Status：Processing 继续退避轮询，Active 才可引用，Failed 时读取 Result.Error.Code 和 Result.Error.Message，不应继续等待审核成功或盲目重复提交相同素材。</p>
+''' + code('json', json.dumps({'ResponseMetadata':{'RequestId':'REQUEST_ID','Action':'GetAsset','Version':'2024-01-01'},'Result':{'Id':'jda_REPLACE','GroupId':'jdg_REPLACE','AssetType':'Image','Status':'Failed','Reference':'asset://jda_REPLACE','Error':{'Code':'InputImageSensitiveContentDetected.PolicyViolation','Message':'The request failed because the input image may be related to copyright restrictions.'}}},ensure_ascii=False,indent=2)) + '''
+<p>以上为失败响应的关键字段示例：上游认为图片可能涉及版权限制。Error 只保留上游提供的非空字符串 Code / Message，并屏蔽当前渠道密钥的直接回显；不改写为确定的侵权结论。错误信息可能为英文，客户端应优先依据 Code 分类，安全地按纯文本展示 Message。</p>
+<p>Error、Code、Message 均为可选字段：上游未提供有效原因时不编造；Active / Processing 不返回 Error。此规则适用于 Lingxi、移动云和数据宝的统一 GetAsset，实际原因由各上游提供。ListAssets 为本地缓存列表，不含这次查询的 Error，失败详情请单独调用 GetAsset。请求本身失败时仍使用原有非 2xx 和 error.code/message，勿与 Result.Error 混淆。</p>
+<h3 id="video-failure">视频生成任务失败</h3>
 <p>下方依据无效图片实测响应整理。HTTP 200 的任务查询仍可能返回 status=failed。检查 error 和 failure_detail，而不是只检查 HTTP 状态。</p>
 ''' + code('json', json.dumps({'id':'task_YOUR_TASK_ID','status':'failed','error':{'code':'task_failed','message':'第 1 张参考图片格式、内容或大小不符合要求。'},'failure_detail':{'code':'material_invalid','stage':'material_validation','provider_code':None,'materials':[{'type':'image','index':1,'content_index':None,'index_scope':'normalized_sources'}],'message':'请更换有效参考图片后重试。'}},ensure_ascii=False,indent=2)) + '''
 <p>material_validation 表示素材校验，material_preparation 表示素材准备。index 按 index_scope 表示素材序号，不能直接当作 content 数组下标；provider_code 或 content_index 可能为空。上游未提供的信息不会凭空补全。</p>

@@ -478,6 +478,24 @@ func changeAsset(c *gin.Context, cfg Config, kind, action string, req AssetReque
 	r.UpdatedAt = time.Now().Unix()
 	view := resourceView(r)
 	if action == "GetAsset" {
+		// A successful query may describe a failed asset. Keep the provider's
+		// diagnostic fields without exposing arbitrary upstream response data.
+		if r.Status == "Failed" {
+			if detail, ok := out["Error"].(map[string]any); ok {
+				failure := map[string]string{}
+				for _, field := range []string{"Code", "Message"} {
+					if value, ok := detail[field].(string); ok && strings.TrimSpace(value) != "" {
+						if key := strings.TrimSpace(ch.Key); key != "" {
+							value = strings.ReplaceAll(value, key, "[REDACTED]")
+						}
+						failure[field] = value
+					}
+				}
+				if len(failure) > 0 {
+					view["Error"] = failure
+				}
+			}
+		}
 		if raw, ok := out["URL"].(string); ok && len(raw) <= 8192 {
 			u, e := url.Parse(raw)
 			if e == nil && u.Host != "" && u.User == nil && (u.Scheme == "http" || u.Scheme == "https") {

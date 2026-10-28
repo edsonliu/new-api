@@ -248,6 +248,65 @@ func newProvider(t *testing.T, ch *model.Channel, path string) *assetFixture {
 	return f
 }
 
+func TestGetAssetFailureDetails(t *testing.T) {
+	for _, provider := range []struct{ name, path string }{{"lingxi", "/api/v3/assets/"}, {"mobilecloud", "/"}, {"shujubao", "/v1/api/assets/"}} {
+		t.Run(provider.name, func(t *testing.T) {
+			r, ch := setupFeature(t)
+			cfg, err := LoadConfig()
+			require.NoError(t, err)
+			cfg.Bindings[0].Provider = provider.name
+			cfg.Bindings[0].StoreTypes = []string{"Image", "Video", "Audio"}
+			setConfig(t, cfg)
+			upstream := newProvider(t, ch, provider.path)
+			code, out := action(t, r, "CreateAssetGroup", map[string]any{"Service": "primary", "Name": "group"}, "group", false)
+			gid := resultID(t, code, out)
+			for _, assetType := range []string{"Image", "Video", "Audio"} {
+				t.Run(assetType, func(t *testing.T) {
+					code, out := action(t, r, "CreateAsset", map[string]any{"GroupId": gid, "AssetType": assetType, "Name": "reference", "URL": "https://93.184.215.14/reference"}, assetType, false)
+					aid := resultID(t, code, out)
+					var row model.JDSeedanceResource
+					require.NoError(t, model.DB.First(&row, "id = ?", aid).Error)
+					failure := map[string]any{"Code": "InputImageSensitiveContentDetected.PolicyViolation", "Message": "The request failed because the input image may be related to copyright restrictions."}
+					for _, tc := range []struct {
+						name, status string
+						detail       any
+						want         map[string]any
+					}{
+						{"moderation", "Failed", failure, failure},
+						{"message_only", "Failed", map[string]any{"Message": "素材无法下载", "Internal": "private"}, map[string]any{"Message": "素材无法下载"}},
+						{"code_only", "Failed", map[string]any{"Code": "DownloadFailed", "Message": nil}, map[string]any{"Code": "DownloadFailed"}},
+						{"credential_echo", "Failed", map[string]any{"Code": "Rejected", "Message": "Rejected test-only-key", "Secret": "private"}, map[string]any{"Code": "Rejected", "Message": "Rejected [REDACTED]"}},
+						{"missing", "Failed", nil, nil},
+						{"malformed", "Failed", "not an object", nil},
+						{"invalid_fields", "Failed", map[string]any{"Code": 1, "Message": map[string]any{"secret": "private"}}, nil},
+						{"empty", "Failed", map[string]any{"Code": "", "Message": " "}, nil},
+						{"active", "Active", failure, nil},
+						{"processing", "Processing", failure, nil},
+					} {
+						t.Run(tc.name, func(t *testing.T) {
+							upstream.mu.Lock()
+							upstream.rows[row.UpstreamID]["Status"] = tc.status
+							upstream.rows[row.UpstreamID]["Error"] = tc.detail
+							upstream.mu.Unlock()
+							code, out := action(t, r, "GetAsset", map[string]any{"Id": aid, "Action": "GetAsset"}, "", false)
+							require.Equal(t, http.StatusOK, code, out)
+							view := out["Result"].(map[string]any)
+							assert.Equal(t, aid, view["Id"])
+							assert.Equal(t, "asset://"+aid, view["Reference"])
+							assert.Equal(t, tc.status, view["Status"])
+							if tc.want == nil {
+								assert.NotContains(t, view, "Error")
+							} else {
+								assert.Equal(t, tc.want, view["Error"])
+							}
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestMaterialCRUDIsolationRoutingAndIdempotency(t *testing.T) {
 	for _, tc := range []struct{ provider, path string }{{"lingxi", "/api/v3/assets/"}, {"mobilecloud", "/"}, {"shujubao", "/v1/api/assets/"}} {
 		t.Run(tc.provider, func(t *testing.T) {

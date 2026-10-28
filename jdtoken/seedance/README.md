@@ -75,6 +75,10 @@ curl "$BASE/doubao/api/v3/assets/?Action=CreateAsset&Version=2024-01-01" \
 
 Get/Update/Delete 使用 `{"Id":"..."}`。UpdateAsset 支持 `Name`；UpdateAssetGroup 支持 `Name`、`Description`。删除组会同时使组内本站素材不可用。单个 GetAsset 返回可用的上游预览 `URL`（可能限时）；列表中的状态是最后一次观察结果，使用 GetAsset 刷新，生成前也会检查上游最新状态。
 
+`GetAsset` 查询成功仍返回 HTTP 200。当 `Result.Status=Failed` 且上游提供有效原因时，追加 `Result.Error.Code` / `Result.Error.Message`，仅保留非空字符串并屏蔽当前渠道密钥的直接回显。原因保持上游语义，不翻译或推断；字段缺失、类型无效或状态不是 Failed 时不补造错误。此行为共用于 Lingxi、移动云、数据宝的图片、视频、音频。列表不保存失败详情，需要调用 GetAsset 查询；请求层错误继续使用原有 HTTP 状态与 `error.code/message`。
+
+失败原因兼容仅修改本模块的响应投影及文档，无数据库迁移、依赖变更或新增上游核心接入点。升级时回归三种渠道的失败详情、缺失/异常错误字段、Active/Processing 响应与既有归属校验；回滚应用仅恢复不返回 Error 的旧行为。
+
 列表支持 `Page` / `PageNumber`、`PageSize`、`NextToken`（下一页数字）、`GroupIds` / `GroupId`、`Status`、`AssetType`、`Service`；返回 `Items`、`TotalCount`、`PageNumber`、`PageSize`、`NextToken`。列表不枚举或导入发布前直接在上游创建的资产。
 
 ## 本地文件上传
