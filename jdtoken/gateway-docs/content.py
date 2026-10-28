@@ -40,8 +40,8 @@ section('开始使用', 'overview', '接入概览', '一份 API 密钥，连接�
 <p>使用 JDOTOKEN 将模型能力接入你的应用。对话请求直接返回回答，也可逐段流式返回；视频请求会先创建任务，再通过任务 ID 查询生成结果。</p>
 <div class="base-address"><span>网关地址</span><code>https://www.jdotoken.com</code><span class="badge">HTTPS</span></div>
 <div class="paths"><a href="#chat"><span class="method">POST</span><code>/v1/chat/completions</code><span>对话 →</span></a><a href="#create-video"><span class="method">POST</span><code>/doubao/api/v3/contents/generations/tasks</code><span>视频 →</span></a></div>
-<p>第一次接入，先创建密钥并查询可用模型，再选择下方的对话或视频示例。所有示例使用本站地址与本站模型名称；https://jdotoken.com 也支持相同接口，建议统一使用主域名。</p>
-<div class="text-links"><a href="#quickstart">开始第一次调用 ↗</a><a href="#video-workflow">了解视频任务流程 ↗</a></div>
+<p>第一次接入，先创建密钥并查询可用模型，再选择下方的对话或视频示例。除明确标注的 Kling 4.0 官方直连参考外，本站示例使用本站地址与本站模型名称；https://jdotoken.com 也支持相同接口，建议统一使用主域名。</p>
+<div class="text-links"><a href="#quickstart">开始第一次调用 ↗</a><a href="#video-workflow">了解视频任务流程 ↗</a><a href="#kling4">Kling 4.0 官方参考 ↗</a></div>
 ''')
 
 section('开始使用', 'quickstart', '快速开始', '从创建密钥到发出第一条请求。', '''
@@ -135,6 +135,88 @@ section('对话 API', 'anthropic', 'Claude / Anthropic', '使用 Messages 格式
   }' ''') + '''
 <p>Anthropic 客户端的基础地址使用 <code>https://www.jdotoken.com</code>，由客户端追加 <code>/v1/messages</code>。流式事件使用 Anthropic 协议，不应套用 OpenAI 的事件解析逻辑。</p>
 ''')
+
+# Official reference only: these endpoints are not exposed by JDOTOKEN yet.
+section('Kling 4.0 · 官方接口参考', 'kling4', 'Kling 4.0 接入说明', '官方图生视频新协议；JDOTOKEN 暂未开放。', note('<strong>当前状态（2026-10-28）：仅提供官方协议参考。</strong>本站尚未适配 Kling 4.0 新接口，也未配置可灵渠道；以下官方请求不能直接替换为 JDOTOKEN 域名或使用本站 API 密钥。本章节不代表已完成生成或计费验收。') + '''
+<p>根据<a href="https://klingai.com/document-api/api/video/4-0/image-to-video" target="_blank" rel="noopener noreferrer">可灵官方 Kling 4.0 图生视频文档</a>整理。该版本通过 <code>contents</code> 描述提示词和关键帧，使用 <code>settings</code> 设置输出参数，使用 <code>options</code> 设置回调等选项；模型由请求路径指定。</p>
+''' + table(['用途', 'Kling 4.0 官方接口', 'JDOTOKEN 当前状态'], [
+    ['创建图生视频', '<code>POST /image-to-video/kling-4.0</code>', '新协议尚未接入。'],
+    ['按 ID 查询任务', '<code>GET /tasks?task_ids=...</code>', '尚未提供该接口。'],
+    ['游标查询任务', '<code>POST /tasks</code>', '尚未提供该接口。'],
+    ['旧版可灵协议', '<code>model_name / image / prompt</code>', '已有旧版 /kling/v1/videos/image2video 适配；不等于兼容 4.0。'],
+]) + '''
+<p>下方示例访问官方中国区 <code>https://api-beijing.klingai.com</code>，使用按官方鉴权说明准备的 <code>KLING_API_KEY</code> Bearer 凭据；不会经过本站，也不消耗 JDOTOKEN 余额。请勿将本站 <code>sk-...</code> 密钥发送到官方地址。</p>
+<p>本站 <code>asset://jda_...</code>、<code>upload://...</code>、Seedance 素材库与任务 ID 不适用于这些官方请求。未来开放前仍需完成新协议、任务查询与计费适配及真实生成验收；仅添加模型名称或修改渠道映射不足以完成接入。</p>
+''')
+
+kling4_body = {
+    'contents': [
+        {'type': 'prompt', 'text': '以 @image_1 为起始画面，让画面中的纸船缓缓漂动，镜头平稳推进。'},
+        {'type': 'first_frame', 'url': 'https://your-public-cdn.example/first-frame.jpg', 'id': 'image_1'},
+    ],
+    'settings': {'resolution': '1080p', 'duration': 10},
+    'options': {'external_task_id': 'your-unique-video-task-001', 'watermark_info': {'enabled': False}},
+}
+# The sh examples intentionally use official credentials and an official origin.
+# Validate them separately from the existing gateway-only bash examples.
+kling4_create = '''curl --fail-with-body --show-error "https://api-beijing.klingai.com/image-to-video/kling-4.0" \\
+  -H "Authorization: Bearer $KLING_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '\n''' + json.dumps(kling4_body, ensure_ascii=False, indent=2) + "'"
+section('Kling 4.0 · 官方接口参考', 'kling4-create', 'Kling 4.0 图生视频', '官方请求格式：提示词＋首帧，或多关键帧。', '''
+<div class="endpoint"><span class="method">POST</span><code>https://api-beijing.klingai.com/image-to-video/kling-4.0</code></div>
+<p><strong>官方直连示例，本站未开放。</strong>先按官方流程准备凭据，将示例图片地址替换为上游可读取的真实图片，并为每次任务使用唯一的 external_task_id。创建成功后保存 <code>data.id</code>，继续查询终态。</p>
+''' + code('sh', kling4_create) + table(['字段', '类型', '官方约束 / 用途'], [
+    ['contents', 'array · 必填', '包含 prompt 和关键帧对象；图片总数最多 10 张。'],
+    ['contents[].type', 'string · 必填', '本图生视频接口列出 prompt、first_frame、middle_frame、last_frame。不要套用其他接口的 refer_image、voice 或 element 类型。'],
+    ['prompt 对象的 text', 'string · 必填', '提示词可包含正向和负向描述；纯英文上限 26,000 字符，纯非英文上限 11,000 字符；混合输入需满足 E/26000 + N/11000 ≤ 1。'],
+    ['关键帧对象的 url', 'string · 必填', '支持 URL 或 Base64；JPG / JPEG / PNG，单张不超过 30 MB，宽高均至少 300 px，宽高比在 2:5～5:2。'],
+    ['关键帧对象的 id', 'string · 选填', '同任务内唯一的引用名，可在提示词中写 @image_1；不是素材库 ID。'],
+    ['settings.resolution', 'string · 选填', '720p 或 1080p；默认 1080p。'],
+    ['settings.duration', 'integer · 选填', '3～30 秒。显式传入优先；省略时识别提示词中的时长意图，未识别到则使用 10 秒。'],
+    ['options.callback_url', 'string · 选填', '官方任务状态回调地址；消息格式以官方 Callback 协议为准，本站未提供该回调能力。'],
+    ['options.external_task_id', 'string · 选填', '账户内唯一的自定义任务 ID，用于查询，不替代系统生成的 data.id。'],
+    ['options.watermark_info.enabled', 'boolean · 选填', '是否同时生成带水印的结果，默认 false；不支持自定义水印。'],
+]) + '''
+<p>本接口未列出旧版 <code>model_name</code>、<code>mode</code>、顶层 <code>image</code>，也未列出 Seedance 的 <code>content</code>、<code>generate_audio</code>、<code>ratio</code>。不要将这些字段直接混入 4.0 请求；声音需求可写入提示词，其他能力请查对应官方接口。</p>
+<h3 id="kling4-keyframes">首帧＋中间帧＋尾帧</h3><p>需要多关键帧时，可将上方 contents 替换为下列结构。图片地址为占位值，需替换。</p>
+''' + code('json', json.dumps({'contents': [
+    {'type': 'prompt', 'text': '从 @image_1 的纸船近景开始，经 @image_2 的溪流画面，自然过渡到 @image_3 的湖面远景。'},
+    {'type': 'first_frame', 'url': 'https://your-public-cdn.example/start.jpg', 'id': 'image_1'},
+    {'type': 'middle_frame', 'url': 'https://your-public-cdn.example/middle.jpg', 'id': 'image_2'},
+    {'type': 'last_frame', 'url': 'https://your-public-cdn.example/end.jpg', 'id': 'image_3'},
+]}, ensure_ascii=False, indent=2)) + '''
+<h3 id="kling4-created">创建响应结构</h3><p>以下为结构示例，并非实际生成结果。注意任务 ID 为 <code>data.id</code>，不是旧版的 <code>data.task_id</code>；时间单位为毫秒。</p>
+''' + code('json', json.dumps({'code': 0, 'message': '', 'request_id': 'OFFICIAL_REQUEST_ID', 'data': {'id': 'OFFICIAL_TASK_ID', 'status': 'submitted', 'create_time': 1793145600000, 'update_time': 1793145600000, 'external_id': 'your-unique-video-task-001'}}, indent=2)))
+
+section('Kling 4.0 · 官方接口参考', 'kling4-query', 'Kling 4.0 查询与结果', '官方任务查询、游标列表和失败原因。', '''
+<p><strong>以下仍为官方直连接口，本站未开放。</strong>使用创建返回的官方任务 ID 查询；支持用逗号分隔多个 ID。<code>task_ids</code> 与 <code>external_task_ids</code> 必须且只能选一种。</p>
+<div class="endpoint"><span class="method get">GET</span><code>https://api-beijing.klingai.com/tasks?task_ids=...</code></div>
+''' + code('sh', '''curl --fail-with-body --show-error --get "https://api-beijing.klingai.com/tasks" \\
+  -H "Authorization: Bearer $KLING_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  --data-urlencode "task_ids=$KLING_TASK_ID"''') + '''
+<p>按 ID 查询的 <code>data</code> 是数组，应按元素 <code>id</code> 匹配任务。成功状态拼写为 <code>succeeded</code>。从 <code>outputs</code> 中筛选 <code>type=video</code> 并读取 <code>url</code>；失败时读取该任务的 <code>message</code>。</p>
+''' + table(['状态', '含义', '客户端处理'], [
+    ['submitted', '已受理', '保留 ID，继续轮询。'],
+    ['processing', '处理中', '间隔轮询；失败重试采用退避，不重复提交生成请求。'],
+    ['succeeded', '成功', '读取 outputs，及时下载视频。'],
+    ['failed', '失败', '记录任务 message 和外层 request_id 后排查。'],
+]) + code('json', json.dumps({'code': 0, 'message': '', 'request_id': 'OFFICIAL_REQUEST_ID', 'data': [{'id': 'OFFICIAL_TASK_ID', 'status': 'succeeded', 'message': '', 'outputs': [{'type': 'video', 'id': 'OFFICIAL_VIDEO_ID', 'url': 'https://your-result-cdn.example/result.mp4', 'duration': '10'}]}]}, indent=2)) + '''
+<p>上方为省略可选字段的结构示例。官方结果还可包含毫秒时间戳、自定义 ID、水印 URL 和 <code>billing</code>。billing 描述官方账户扣费，并非本站消费记录或本站售价；生成文件官方保留 30 天，应及时转存。</p>
+<h3 id="kling4-list">按游标查询任务</h3>
+<div class="endpoint"><span class="method">POST</span><code>https://api-beijing.klingai.com/tasks</code></div>
+''' + code('sh', '''curl --fail-with-body --show-error "https://api-beijing.klingai.com/tasks" \\
+  -H "Authorization: Bearer $KLING_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"limit": 100, "filters": [{"key": "product_type", "values": ["video"]}]}' ''') + '''
+<p>列表读取 <code>data.result</code>；有后续结果时，将 <code>data.next_cursor</code> 作为下一次请求的 <code>cursor</code>，直到 <code>data.has_more=false</code>。此 POST 用于查询，不创建视频。</p>
+''' + table(['字段', '说明'], [
+    ['start_time / end_time', '可选，毫秒 Unix 时间戳字符串；结束默认当前时间，开始默认结束前 30 天，开始需早于结束。'],
+    ['cursor', '可选，来自上一页 next_cursor；非空时忽略 start_time / end_time。'],
+    ['limit', '可选整数，默认 100，最大 500。'],
+    ['filters', '可选数组；key=status 可筛选 submitted / processing / succeeded / failed；key=product_type 可筛选 video / image / try_on。'],
+]) + note('先检查 HTTP 状态与外层 code / message，再判断任务 status。HTTP 200 或 code=0 仅表示查询成功，不代表视频生成成功。保存 request_id、任务 ID 和失败 message；具体错误码和回调协议以官方文档为准。'))
 
 section('视频 API', 'video-workflow', '视频任务流程', '先提交任务，再等待并获取结果。', '''
 <div class="flow" aria-label="视频任务流程"><span>创建任务</span><b>→</b><span>保存 task_id</span><b>→</b><span>轮询状态</span><b>→</b><span>下载视频</span></div>
@@ -439,7 +521,8 @@ section('用量与排错', 'errors', '错误处理与限制', '先确认错误�
  ['客户端提示“仅支持 Image/Video”', '若请求尚未到达本站，更新调用方类型校验和能力缓存；Audio 入库与引用分开判断。'],
 ]) + '<h3 id="material-retry">素材并发与重试</h3><p>409 resource_busy 表示资源仍在处理，不等于审核失败。服务器会短暂等待资源锁，超时仍可能返回该错误及 Retry-After: 2。按响应头等待至少 2 秒并增加随机退避后，重试相同请求；创建操作保持原 Idempotency-Key。409 idempotency_conflict 应核对同 Key 的参数是否改变；creation_unconfirmed 表示上游创建结果待核对，不能当作 resource_busy 自动重复提交或换 Key。</p>')
 
-section('用量与排错', 'compatibility', '兼容范围与已知限制', '截至 2026-10-27：区分已实测、配置声明和未开放能力。', table(['能力', '状态 / 验证范围', '接入建议'], [
+section('用量与排错', 'compatibility', '兼容范围与已知限制', '截至 2026-10-28：区分已实测、配置声明和未开放能力。', table(['能力', '状态 / 验证范围', '接入建议'], [
+ ['Kling 4.0 新协议', '仅补充官方接口参考；本站尚未适配、未配置可灵渠道', '<a href="#kling4">查看官方格式与接入差异</a>；不能直接替换域名调用。'],
  ['素材与素材组十个 Action', '两个素材服务全部通过生产验证', '只管理本站当前用户素材，使用 jdg_ / jda_ ID。'],
  ['素材引用生成', 'standard：mini 图片+视频；alternate：2.0 图片，均已生成并下载', '4 秒、480p 的样本，不代表所有参数组合。'],
  ['签名上传 / 上传引用', 'PUT、确认、下载、HEAD、Range、权限及重复上传验证通过；upload 服务 mini 生成成功', '使用 upload:// 引用或另行入库；24 小时有效。'],
@@ -465,6 +548,6 @@ section('用量与排错', 'compatibility', '兼容范围与已知限制', '截�
 ]) + '<p>素材权限隔离、幂等、上传重放拦截及取消结算均已验证。表中服务范围以能力查询为准；管理员配置声明不等于所有模型、素材与参数组合均已实测。</p>')
 
 section('用量与排错', 'changelog', '文档更新', '记录接口说明与验证范围的变化。', '''
-<h3 id="release-20261027-shujubao">2026-10-27 · 数据宝适配说明</h3><ul><li>新增数据宝三类素材、四模型生成、真人认证会话与结果查询的接入说明。</li><li>数据宝服务已在正式环境开放；四模型三类素材 ID 生成通过，实际权限以实时能力响应为准。</li><li>明确本人活体认证待人工验收，以及不跨渠道混用素材的限制。</li></ul><h3 id="release-20261026-audio-matrix">2026-10-26 · 音频模型覆盖检查</h3><ul><li>补齐 standard fast、2.5 音频引用，以及 alternate 2.0 音频入库和引用。</li><li>新增三种通过本站实际成片验收的请求示例；保留素材账号隔离和本地音频直传限制。</li><li>说明 seedance-upload 上游账号素材权限阻断，未将受理或配置声明当作成功验收。</li></ul><h3 id="release-20261026-audio">2026-10-26 · 完整版 2.0 音频素材引用</h3><ul><li>standard 的完整版 2.0 新增 Audio 引用，mini 保持支持。</li><li>补充原生 15 秒、720p、9:16、多图片与双音频组合，以及 OpenAI 双音频示例。</li><li>更新模型能力、422 排查和已知限制；说明占位视频仍会作为参考发送。</li></ul><h3 id="release-20261024-audio">2026-10-24 · 音频素材入库与 mini 引用生成</h3><ul><li>更新 standard 的音频入库、mini 音频素材 ID 引用能力和实时能力响应示例。</li><li>新增 WAV URL 入库、图片＋音频及图片＋视频＋音频的原生/OpenAI 请求写法，标明实际验收入口。</li><li>补充 422 类型限制、Active 状态、跨服务引用与客户端类型缓存排查；保留本地音频直传未开放的限制。</li><li>补充 resource_busy 的 Retry-After 与同幂等 Key 重试说明。</li></ul><h3 id="release-20261023">2026-10-23 · 素材管理第一阶段上线</h3><ul><li>新增服务能力查询、素材与素材组十个 Action、幂等与用户归属说明。</li><li>新增本地签名上传、upload:// 与 asset:// 引用生成示例。</li><li>更新任务分页、筛选、取消与终态隐藏语义；移除这些接口尚未开放的旧结论。</li><li>按本轮生产回归更新各服务验证范围，区分配置声明和端到端实测。</li></ul><h3 id="release-20261012-verified">2026-10-12 · 实测更新</h3><ul><li>补充 mini OpenAI JSON、图片 / 视频 asset、Base64 首帧、尾帧和失败详情说明。</li><li>标注旧版创建、上传、列表、取消和对账的明确限制，新增协议响应差异。</li><li>修正下载命令，说明 metadata 参数写法、HEAD 和 MIME 兼容问题。</li><li>更新官方 Logo、公安备案信息与文档布局。</li></ul><h3 id="release-20261012">2026-10-12 · 首版</h3><ul><li>新增快速开始、鉴权、模型目录、对话与流式接入说明。</li><li>新增 Seedance 创建、图片参考、查询、下载与草稿示例。</li><li>根据真实任务记录标注 2.0 mini 与 2.5 的验证范围。</li><li>说明计费、重复提交风险及尚未开放的扩展能力。</li></ul>
-<p>最后核对日期：2026-10-27。模型与价格可能先于文档更新，以账户实时列表和控制台为准。</p>
+<h3 id="release-20261028-kling4">2026-10-28 · Kling 4.0 官方接口参考</h3><ul><li>补充新版图生视频的 contents / settings / options、关键帧示例、按 ID 与游标查询。</li><li>明确与旧版可灵协议及 Seedance 素材库的区别；本站暂未开放，不宣称生成或计费验收通过。</li></ul><h3 id="release-20261027-shujubao">2026-10-27 · 数据宝适配说明</h3><ul><li>新增数据宝三类素材、四模型生成、真人认证会话与结果查询的接入说明。</li><li>数据宝服务已在正式环境开放；四模型三类素材 ID 生成通过，实际权限以实时能力响应为准。</li><li>明确本人活体认证待人工验收，以及不跨渠道混用素材的限制。</li></ul><h3 id="release-20261026-audio-matrix">2026-10-26 · 音频模型覆盖检查</h3><ul><li>补齐 standard fast、2.5 音频引用，以及 alternate 2.0 音频入库和引用。</li><li>新增三种通过本站实际成片验收的请求示例；保留素材账号隔离和本地音频直传限制。</li><li>说明 seedance-upload 上游账号素材权限阻断，未将受理或配置声明当作成功验收。</li></ul><h3 id="release-20261026-audio">2026-10-26 · 完整版 2.0 音频素材引用</h3><ul><li>standard 的完整版 2.0 新增 Audio 引用，mini 保持支持。</li><li>补充原生 15 秒、720p、9:16、多图片与双音频组合，以及 OpenAI 双音频示例。</li><li>更新模型能力、422 排查和已知限制；说明占位视频仍会作为参考发送。</li></ul><h3 id="release-20261024-audio">2026-10-24 · 音频素材入库与 mini 引用生成</h3><ul><li>更新 standard 的音频入库、mini 音频素材 ID 引用能力和实时能力响应示例。</li><li>新增 WAV URL 入库、图片＋音频及图片＋视频＋音频的原生/OpenAI 请求写法，标明实际验收入口。</li><li>补充 422 类型限制、Active 状态、跨服务引用与客户端类型缓存排查；保留本地音频直传未开放的限制。</li><li>补充 resource_busy 的 Retry-After 与同幂等 Key 重试说明。</li></ul><h3 id="release-20261023">2026-10-23 · 素材管理第一阶段上线</h3><ul><li>新增服务能力查询、素材与素材组十个 Action、幂等与用户归属说明。</li><li>新增本地签名上传、upload:// 与 asset:// 引用生成示例。</li><li>更新任务分页、筛选、取消与终态隐藏语义；移除这些接口尚未开放的旧结论。</li><li>按本轮生产回归更新各服务验证范围，区分配置声明和端到端实测。</li></ul><h3 id="release-20261012-verified">2026-10-12 · 实测更新</h3><ul><li>补充 mini OpenAI JSON、图片 / 视频 asset、Base64 首帧、尾帧和失败详情说明。</li><li>标注旧版创建、上传、列表、取消和对账的明确限制，新增协议响应差异。</li><li>修正下载命令，说明 metadata 参数写法、HEAD 和 MIME 兼容问题。</li><li>更新官方 Logo、公安备案信息与文档布局。</li></ul><h3 id="release-20261012">2026-10-12 · 首版</h3><ul><li>新增快速开始、鉴权、模型目录、对话与流式接入说明。</li><li>新增 Seedance 创建、图片参考、查询、下载与草稿示例。</li><li>根据真实任务记录标注 2.0 mini 与 2.5 的验证范围。</li><li>说明计费、重复提交风险及尚未开放的扩展能力。</li></ul>
+<p>最后核对日期：2026-10-28。模型与价格可能先于文档更新，以账户实时列表和控制台为准。</p>
 ''')

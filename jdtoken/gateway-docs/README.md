@@ -25,6 +25,18 @@ example syntax without executing generation requests. It checks layout at deskto
 
 ## Content baseline
 
+Kling 4.0 reference added on 2026-10-28 from the official
+`https://klingai.com/document-api/api/video/4-0/image-to-video` page and its
+published API definitions. This is explicitly an **official-origin reference**,
+not a supported JDOTOKEN endpoint: the new `/image-to-video/kling-4.0` and
+`/tasks` protocol differs from the existing Kling plugin. No Kling channel was
+configured at review time. The three `sh` examples use `KLING_API_KEY` and the
+official Beijing origin; validate their shell/JSON syntax separately from the
+gateway-only `bash` examples. No generation or billing acceptance is claimed.
+Research, example checks and browser evidence are in workspace
+`reports/kling4-docs-20261028/`. Future enablement requires a fresh implementation,
+channel/pricing review and end-to-end acceptance before removing these notices.
+
 Updated 2026-10-26 against `jdtoken/seedance/` and production acceptance evidence in
 workspace `reports/seedance-release-20261023/`,
 `reports/seedance-media-e2e-20261024/`, `reports/lingxi-audio-reference-20261024/`
